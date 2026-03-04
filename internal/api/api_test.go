@@ -162,23 +162,23 @@ func runMigrations(t *testing.T, pool *pgxpool.Pool) {
 	}
 
 	// River queue tables (required for river.Insert calls in handlers).
-	// We create these directly rather than via rivermigrate to ensure they
-	// exist even after cleanDatabase runs (which only drops app tables).
-	riverSQL := `
-		DO $$ BEGIN
+	// Each statement must be executed individually because pgx v5 uses the
+	// extended query protocol which only supports single statements.
+	riverStmts := []string{
+		`DO $$ BEGIN
 			IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'river_job_state') THEN
 				CREATE TYPE river_job_state AS ENUM(
 					'available','cancelled','completed','discarded','pending','retryable','running','scheduled'
 				);
 			END IF;
-		END $$;
-		CREATE TABLE IF NOT EXISTS river_migration(
+		END $$`,
+		`CREATE TABLE IF NOT EXISTS river_migration(
 			line TEXT NOT NULL DEFAULT 'main',
 			version bigint NOT NULL,
 			created_at timestamptz NOT NULL DEFAULT NOW(),
 			PRIMARY KEY (line, version)
-		);
-		CREATE TABLE IF NOT EXISTS river_job(
+		)`,
+		`CREATE TABLE IF NOT EXISTS river_job(
 			id bigserial PRIMARY KEY,
 			state river_job_state NOT NULL DEFAULT 'available',
 			attempt smallint NOT NULL DEFAULT 0,
@@ -197,28 +197,28 @@ func runMigrations(t *testing.T, pool *pgxpool.Pool) {
 			tags varchar(255)[] NOT NULL DEFAULT '{}',
 			unique_key bytea,
 			unique_states bit(8)
-		);
-		CREATE TABLE IF NOT EXISTS river_leader(
+		)`,
+		`CREATE TABLE IF NOT EXISTS river_leader(
 			elected_at timestamptz NOT NULL,
 			expires_at timestamptz NOT NULL,
 			leader_id text NOT NULL,
 			name text PRIMARY KEY DEFAULT 'default'
-		);
-		CREATE TABLE IF NOT EXISTS river_queue(
+		)`,
+		`CREATE TABLE IF NOT EXISTS river_queue(
 			name text PRIMARY KEY NOT NULL,
 			created_at timestamptz NOT NULL DEFAULT now(),
 			metadata jsonb NOT NULL DEFAULT '{}',
 			paused_at timestamptz,
 			updated_at timestamptz NOT NULL DEFAULT now()
-		);
-		CREATE TABLE IF NOT EXISTS river_client(
+		)`,
+		`CREATE TABLE IF NOT EXISTS river_client(
 			id text PRIMARY KEY NOT NULL,
 			created_at timestamptz NOT NULL DEFAULT now(),
 			metadata jsonb NOT NULL DEFAULT '{}',
 			paused_at timestamptz,
 			updated_at timestamptz NOT NULL DEFAULT now()
-		);
-		CREATE TABLE IF NOT EXISTS river_client_queue(
+		)`,
+		`CREATE TABLE IF NOT EXISTS river_client_queue(
 			river_client_id text NOT NULL REFERENCES river_client(id) ON DELETE CASCADE,
 			name text NOT NULL,
 			created_at timestamptz NOT NULL DEFAULT now(),
@@ -228,9 +228,12 @@ func runMigrations(t *testing.T, pool *pgxpool.Pool) {
 			num_jobs_running bigint NOT NULL DEFAULT 0,
 			updated_at timestamptz NOT NULL DEFAULT now(),
 			PRIMARY KEY (river_client_id, name)
-		);`
-	if _, err := pool.Exec(ctx, riverSQL); err != nil {
-		t.Fatalf("failed to create river tables: %v", err)
+		)`,
+	}
+	for i, stmt := range riverStmts {
+		if _, err := pool.Exec(ctx, stmt); err != nil {
+			t.Fatalf("failed to create river table (stmt %d): %v", i, err)
+		}
 	}
 }
 
@@ -257,6 +260,11 @@ func cleanDatabase(pool *pgxpool.Pool) {
 	for _, t := range tables {
 		pool.Exec(ctx, fmt.Sprintf("DROP TABLE IF EXISTS %s CASCADE", t))
 	}
+	// Drop River tables and types.
+	for _, t := range []string{"river_client_queue", "river_client", "river_queue", "river_leader", "river_job", "river_migration"} {
+		pool.Exec(ctx, fmt.Sprintf("DROP TABLE IF EXISTS %s CASCADE", t))
+	}
+	pool.Exec(ctx, "DROP TYPE IF EXISTS river_job_state CASCADE")
 	pool.Exec(ctx, "DROP EXTENSION IF EXISTS vector CASCADE")
 }
 
