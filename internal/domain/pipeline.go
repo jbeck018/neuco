@@ -49,7 +49,7 @@ type PipelineRun struct {
 	Metadata    json.RawMessage   `json:"metadata,omitempty"`
 	StartedAt   *time.Time        `json:"started_at,omitempty"`
 	CompletedAt *time.Time        `json:"completed_at,omitempty"`
-	Error       string            `json:"error,omitempty"`
+	Error       *string           `json:"error,omitempty"`
 	CreatedAt   time.Time         `json:"created_at"`
 	Tasks       []PipelineTask    `json:"tasks,omitempty"`
 }
@@ -65,6 +65,6 @@ type PipelineTask struct {
 	StartedAt     *time.Time         `json:"started_at,omitempty"`
 	CompletedAt   *time.Time         `json:"completed_at,omitempty"`
 	DurationMs    int                `json:"duration_ms,omitempty"`
-	Error         string             `json:"error,omitempty"`
+	Error         *string            `json:"error,omitempty"`
 	SortOrder     int                `json:"sort_order"`
 }

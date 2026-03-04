@@ -178,9 +178,8 @@ func OperatorUpdateFlag(d *Deps) http.HandlerFunc {
 			return
 		}
 
-		// Operator routes use a static token, so we use a nil UUID
-		// to indicate an operator-level change rather than a user-level change.
-		if err := d.Store.SetFlag(r.Context(), key, req.Enabled, uuid.Nil); err != nil {
+		// Operator routes use a static token — pass nil for updated_by.
+		if err := d.Store.SetFlag(r.Context(), key, req.Enabled, nil); err != nil {
 			respondErr(w, r, http.StatusNotFound, "flag not found")
 			return
 		}

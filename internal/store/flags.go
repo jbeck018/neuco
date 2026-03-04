@@ -56,7 +56,7 @@ func (s *Store) ListFlags(ctx context.Context) ([]domain.FeatureFlag, error) {
 }
 
 // SetFlag updates the enabled status of a feature flag and records who made the change.
-func (s *Store) SetFlag(ctx context.Context, key string, enabled bool, updatedBy uuid.UUID) error {
+func (s *Store) SetFlag(ctx context.Context, key string, enabled bool, updatedBy *uuid.UUID) error {
 	const q = `
 		UPDATE feature_flags
 		SET    enabled    = $2,

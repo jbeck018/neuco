@@ -133,6 +133,33 @@ func runMigrations(t *testing.T, pool *pgxpool.Pool) {
 	if _, err := pool.Exec(ctx, string(migration2)); err != nil {
 		t.Fatalf("failed to run migration 000002: %v", err)
 	}
+
+	// Migration 000003 (github app installation)
+	migration3, err := os.ReadFile("../../migrations/000003_github_app_installation.up.sql")
+	if err != nil {
+		t.Fatalf("failed to read migration 000003: %v", err)
+	}
+	if _, err := pool.Exec(ctx, string(migration3)); err != nil {
+		t.Fatalf("failed to run migration 000003: %v", err)
+	}
+
+	// Migration 000004 (users github token)
+	migration4, err := os.ReadFile("../../migrations/000004_users_github_token.up.sql")
+	if err != nil {
+		t.Fatalf("failed to read migration 000004: %v", err)
+	}
+	if _, err := pool.Exec(ctx, string(migration4)); err != nil {
+		t.Fatalf("failed to run migration 000004: %v", err)
+	}
+
+	// Migration 000005 (expand framework check)
+	migration5, err := os.ReadFile("../../migrations/000005_expand_framework_check.up.sql")
+	if err != nil {
+		t.Fatalf("failed to read migration 000005: %v", err)
+	}
+	if _, err := pool.Exec(ctx, string(migration5)); err != nil {
+		t.Fatalf("failed to run migration 000005: %v", err)
+	}
 }
 
 // cleanDatabase drops all application tables so each test run starts fresh.
@@ -502,7 +529,7 @@ func TestSignalUpload(t *testing.T) {
 		if err != nil {
 			t.Fatalf("do request: %v", err)
 		}
-		assertStatus(t, resp, http.StatusOK)
+		assertStatus(t, resp, http.StatusCreated)
 
 		body := readBody(t, resp)
 		var result struct {
@@ -572,7 +599,7 @@ func TestSpecGeneration(t *testing.T) {
 	ctx := context.Background()
 	_, err = env.pool.Exec(ctx, `
 		INSERT INTO feature_candidates (id, project_id, title, problem_summary, signal_count, score, status)
-		VALUES ($1, $2, 'Dark Mode', 'Users want dark mode', 5, 0.85, 'pending')`,
+		VALUES ($1, $2, 'Dark Mode', 'Users want dark mode', 5, 0.85, 'new')`,
 		uuid.New(), project.ID,
 	)
 	if err != nil {
