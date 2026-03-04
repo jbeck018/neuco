@@ -15,6 +15,7 @@ import (
 
 	"github.com/neuco-ai/neuco/internal/api"
 	"github.com/neuco-ai/neuco/internal/config"
+	"github.com/neuco-ai/neuco/internal/jobs"
 	"github.com/neuco-ai/neuco/internal/store"
 )
 
@@ -38,16 +39,19 @@ func main() {
 	}
 	slog.Info("connected to database")
 
-	// River client in insert-only mode (no workers)
+	s := store.New(pool)
+
+	// River client in insert-only mode — workers must still be registered
+	// so that River recognises the job kinds during Insert.
+	workers := river.NewWorkers()
+	jobs.RegisterAllWorkers(workers, s, cfg)
 	riverClient, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
-		Workers: river.NewWorkers(),
+		Workers: workers,
 	})
 	if err != nil {
 		slog.Error("failed to create river client", "error", err)
 		os.Exit(1)
 	}
-
-	s := store.New(pool)
 
 	deps := api.NewDeps(s, riverClient, cfg, pool)
 	// NewRouter constructs the full Chi router with all middleware and routes.
