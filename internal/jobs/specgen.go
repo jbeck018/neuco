@@ -244,10 +244,11 @@ func findJSONEnd(s string) int {
 	depth := 0
 	start := false
 	for i, c := range s {
-		if c == '{' {
+		switch c {
+		case '{':
 			depth++
 			start = true
-		} else if c == '}' {
+		case '}':
 			depth--
 			if start && depth == 0 {
 				return i

@@ -46,7 +46,7 @@ func UploadSignals(d *Deps) http.HandlerFunc {
 			respondErr(w, r, http.StatusBadRequest, "file field is required")
 			return
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 
 		contentType := header.Header.Get("Content-Type")
 		filename := header.Filename

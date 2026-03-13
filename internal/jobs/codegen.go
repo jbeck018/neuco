@@ -558,10 +558,11 @@ func findJSONArrayEnd(s string) int {
 	depth := 0
 	started := false
 	for i, c := range s {
-		if c == '[' {
+		switch c {
+		case '[':
 			depth++
 			started = true
-		} else if c == ']' {
+		case ']':
 			depth--
 			if started && depth == 0 {
 				return i

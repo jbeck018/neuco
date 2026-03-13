@@ -188,7 +188,7 @@ func StreamGenerationProgress(d *Deps) http.HandlerFunc {
 			if jerr != nil {
 				data = []byte(`{}`)
 			}
-			fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, string(data))
+			_, _ = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, string(data))
 			flusher.Flush()
 		}
 

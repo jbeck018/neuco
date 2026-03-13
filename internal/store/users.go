@@ -20,7 +20,7 @@ func (s *Store) UpsertUser(ctx context.Context, githubID int64, login, email, av
 	const q = `
 		INSERT INTO users (github_id, github_login, email, avatar_url)
 		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (github_id) DO UPDATE
+		ON CONFLICT (github_id) WHERE github_id IS NOT NULL DO UPDATE
 			SET github_login = EXCLUDED.github_login,
 			    email        = EXCLUDED.email,
 			    avatar_url   = EXCLUDED.avatar_url
@@ -42,7 +42,7 @@ func (s *Store) UpsertUserByGoogle(ctx context.Context, googleID, email, name, a
 	const q = `
 		INSERT INTO users (google_id, email, name, avatar_url)
 		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (google_id) DO UPDATE
+		ON CONFLICT (google_id) WHERE google_id IS NOT NULL DO UPDATE
 			SET email      = EXCLUDED.email,
 			    name       = EXCLUDED.name,
 			    avatar_url = EXCLUDED.avatar_url

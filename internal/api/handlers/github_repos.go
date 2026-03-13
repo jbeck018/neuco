@@ -73,14 +73,7 @@ func ListUserRepos(d *Deps) http.HandlerFunc {
 
 		result := make([]userRepo, 0, len(repos))
 		for _, repo := range repos {
-			result = append(result, userRepo{
-				FullName:    repo.FullName,
-				Name:        repo.Name,
-				Description: repo.Description,
-				Language:    repo.Language,
-				Private:     repo.Private,
-				UpdatedAt:   repo.UpdatedAt,
-			})
+			result = append(result, userRepo(repo))
 		}
 
 		respondOK(w, r, result)

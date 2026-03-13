@@ -299,15 +299,15 @@ func cleanDatabase(pool *pgxpool.Pool) {
 		"users",
 	}
 	for _, t := range tables {
-		pool.Exec(ctx, fmt.Sprintf("DROP TABLE IF EXISTS %s CASCADE", t))
+		_, _ = pool.Exec(ctx, fmt.Sprintf("DROP TABLE IF EXISTS %s CASCADE", t))
 	}
 	// Drop River tables and types.
 	for _, t := range []string{"river_client_queue", "river_client", "river_queue", "river_leader", "river_job", "river_migration"} {
-		pool.Exec(ctx, fmt.Sprintf("DROP TABLE IF EXISTS %s CASCADE", t))
+		_, _ = pool.Exec(ctx, fmt.Sprintf("DROP TABLE IF EXISTS %s CASCADE", t))
 	}
-	pool.Exec(ctx, "DROP FUNCTION IF EXISTS river_job_notify CASCADE")
-	pool.Exec(ctx, "DROP TYPE IF EXISTS river_job_state CASCADE")
-	pool.Exec(ctx, "DROP EXTENSION IF EXISTS vector CASCADE")
+	_, _ = pool.Exec(ctx, "DROP FUNCTION IF EXISTS river_job_notify CASCADE")
+	_, _ = pool.Exec(ctx, "DROP TYPE IF EXISTS river_job_state CASCADE")
+	_, _ = pool.Exec(ctx, "DROP EXTENSION IF EXISTS vector CASCADE")
 }
 
 // ─── JWT Helpers ───────────────────────────────────────────────────────────────
@@ -637,8 +637,12 @@ func TestSignalUpload(t *testing.T) {
 		if err != nil {
 			t.Fatalf("create form file: %v", err)
 		}
-		part.Write([]byte(csvData))
-		writer.Close()
+		if _, werr := part.Write([]byte(csvData)); werr != nil {
+			t.Fatalf("part write: %v", werr)
+		}
+		if cerr := writer.Close(); cerr != nil {
+			t.Fatalf("writer close: %v", cerr)
+		}
 
 		req, err := http.NewRequest(http.MethodPost, env.server.URL+"/api/v1/projects/"+project.ID.String()+"/signals/upload", &buf)
 		if err != nil {
@@ -1306,8 +1310,12 @@ func TestUsageLimitEnforcement(t *testing.T) {
 		if err != nil {
 			t.Fatalf("create form file: %v", err)
 		}
-		part.Write([]byte(csvData))
-		writer.Close()
+		if _, werr := part.Write([]byte(csvData)); werr != nil {
+			t.Fatalf("part write: %v", werr)
+		}
+		if cerr := writer.Close(); cerr != nil {
+			t.Fatalf("writer close: %v", cerr)
+		}
 
 		req, err := http.NewRequest(http.MethodPost, env.server.URL+"/api/v1/projects/"+project.ID.String()+"/signals/upload", &buf)
 		if err != nil {

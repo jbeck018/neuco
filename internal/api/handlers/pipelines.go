@@ -11,12 +11,6 @@ import (
 	"github.com/neuco-ai/neuco/internal/store"
 )
 
-// pipelineRunDetail bundles a PipelineRun with its tasks.
-type pipelineRunDetail struct {
-	Run   domain.PipelineRun    `json:"run"`
-	Tasks []domain.PipelineTask `json:"tasks"`
-}
-
 // pipelinePage is the paginated list response for pipeline runs.
 type pipelinePage struct {
 	Runs  []domain.PipelineRun `json:"runs"`

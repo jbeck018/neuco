@@ -34,8 +34,6 @@ type Connection struct {
 
 // NewClient constructs a Client that communicates with the Nango server at
 // baseURL using secretKey for server-side authentication.
-const requestTimeout = 10 * time.Second
-
 func NewClient(baseURL, secretKey string) *Client {
 	return &Client{
 		baseURL:   baseURL,

@@ -325,12 +325,3 @@ func (s *GitHubService) CreatePullRequest(
 	return pr, nil
 }
 
-// parseOwnerRepo splits a "owner/repo" string into its two components.
-// Returns an error if the string does not have exactly one "/" separator.
-func parseOwnerRepo(ownerRepo string) (owner, repo string, err error) {
-	parts := strings.SplitN(ownerRepo, "/", 2)
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return "", "", fmt.Errorf("parseOwnerRepo: expected 'owner/repo', got %q", ownerRepo)
-	}
-	return parts[0], parts[1], nil
-}

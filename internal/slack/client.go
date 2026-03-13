@@ -97,7 +97,7 @@ func (c *Client) ExchangeCode(ctx context.Context, code, redirectURI string) (*O
 	if err != nil {
 		return nil, fmt.Errorf("slack.ExchangeCode: request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode != http.StatusOK {
@@ -156,7 +156,7 @@ func ListChannels(ctx context.Context, accessToken string) ([]Channel, error) {
 		}
 
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
-		resp.Body.Close()
+		_ = resp.Body.Close()
 
 		var result struct {
 			OK       bool      `json:"ok"`
@@ -216,7 +216,7 @@ func FetchChannelHistory(ctx context.Context, accessToken, channelID string, old
 		}
 
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
-		resp.Body.Close()
+		_ = resp.Body.Close()
 
 		var result struct {
 			OK       bool      `json:"ok"`

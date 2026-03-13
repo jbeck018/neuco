@@ -125,12 +125,12 @@ func BuildCodegenContext(index *RepoIndex, spec *domain.Spec) string {
 		// Build a compact representation: props list + import list.
 		var desc strings.Builder
 		if len(comp.Props) > 0 {
-			desc.WriteString(fmt.Sprintf("// Props: %s\n", strings.Join(comp.Props, ", ")))
+			fmt.Fprintf(&desc, "// Props: %s\n", strings.Join(comp.Props, ", "))
 		}
 		if len(comp.Imports) > 0 {
-			desc.WriteString(fmt.Sprintf("// Imports: %s\n", strings.Join(comp.Imports, ", ")))
+			fmt.Fprintf(&desc, "// Imports: %s\n", strings.Join(comp.Imports, ", "))
 		}
-		desc.WriteString(fmt.Sprintf("// File size: %d bytes", comp.FileSize))
+		fmt.Fprintf(&desc, "// File size: %d bytes", comp.FileSize)
 
 		if writeSection("Component: "+comp.Name, comp.Path, desc.String()) {
 			compsAdded++

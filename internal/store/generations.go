@@ -145,7 +145,9 @@ func scanGeneration(row pgx.Row) (domain.Generation, error) {
 		return domain.Generation{}, err
 	}
 	if len(filesJSON) > 0 {
-		json.Unmarshal(filesJSON, &g.Files)
+		if err := json.Unmarshal(filesJSON, &g.Files); err != nil {
+			return domain.Generation{}, fmt.Errorf("unmarshal files: %w", err)
+		}
 	}
 	return g, nil
 }

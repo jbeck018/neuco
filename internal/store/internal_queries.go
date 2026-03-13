@@ -46,10 +46,18 @@ func (s *Store) GetSpecInternal(ctx context.Context, specID uuid.UUID) (*domain.
 	if err != nil {
 		return nil, fmt.Errorf("store.GetSpecInternal: %w", err)
 	}
-	json.Unmarshal(userStoriesJSON, &spec.UserStories)
-	json.Unmarshal(criteriaJSON, &spec.AcceptanceCriteria)
-	json.Unmarshal(oosJSON, &spec.OutOfScope)
-	json.Unmarshal(oqJSON, &spec.OpenQuestions)
+	if err := json.Unmarshal(userStoriesJSON, &spec.UserStories); err != nil {
+		return nil, fmt.Errorf("store.GetSpecInternal: unmarshal user_stories: %w", err)
+	}
+	if err := json.Unmarshal(criteriaJSON, &spec.AcceptanceCriteria); err != nil {
+		return nil, fmt.Errorf("store.GetSpecInternal: unmarshal acceptance_criteria: %w", err)
+	}
+	if err := json.Unmarshal(oosJSON, &spec.OutOfScope); err != nil {
+		return nil, fmt.Errorf("store.GetSpecInternal: unmarshal out_of_scope: %w", err)
+	}
+	if err := json.Unmarshal(oqJSON, &spec.OpenQuestions); err != nil {
+		return nil, fmt.Errorf("store.GetSpecInternal: unmarshal open_questions: %w", err)
+	}
 	return &spec, nil
 }
 

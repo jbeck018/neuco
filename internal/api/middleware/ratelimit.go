@@ -199,7 +199,7 @@ func rateLimitMiddleware(cfg LimitConfig) func(http.Handler) http.Handler {
 				w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusTooManyRequests)
-				w.Write([]byte(`{"error":"rate limit exceeded"}`))
+				_, _ = w.Write([]byte(`{"error":"rate limit exceeded"}`))
 				return
 			}
 			next.ServeHTTP(w, r)

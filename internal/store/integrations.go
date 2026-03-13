@@ -124,7 +124,9 @@ func scanIntegration(row pgx.Row) (domain.Integration, error) {
 		return domain.Integration{}, err
 	}
 	if configRaw != nil {
-		json.Unmarshal(configRaw, &intg.Config)
+		if err := json.Unmarshal(configRaw, &intg.Config); err != nil {
+			return domain.Integration{}, fmt.Errorf("unmarshal config: %w", err)
+		}
 	}
 	return intg, nil
 }

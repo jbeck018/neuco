@@ -258,11 +258,6 @@ func LinearWebhook(d *Deps) http.HandlerFunc {
 		if event.Data.Team != nil {
 			teamKey = event.Data.Team.Key
 		}
-		var labels []string
-		for _, l := range event.Data.Labels {
-			labels = append(labels, l.Name)
-		}
-
 		for _, intg := range integrations {
 			issue := linear.Issue{
 				ID:         event.Data.ID,
@@ -284,6 +279,6 @@ func LinearWebhook(d *Deps) http.HandlerFunc {
 		}
 
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, `{"status":"ok"}`)
+		_, _ = fmt.Fprint(w, `{"status":"ok"}`)
 	}
 }
