@@ -791,7 +791,7 @@ func buildPRBody(gen *domain.Generation, spec *domain.Spec) string {
 		sb.WriteString("\n")
 	}
 
-	sb.WriteString(fmt.Sprintf("**Generation ID:** `%s`\n", gen.ID.String()))
+	fmt.Fprintf(&sb, "**Generation ID:** `%s`\n", gen.ID.String())
 	return sb.String()
 }
 
