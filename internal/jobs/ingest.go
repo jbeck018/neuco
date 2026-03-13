@@ -356,7 +356,7 @@ func generateEmbedding(ctx context.Context, apiKey string, text string) ([]float
 	if err != nil {
 		return nil, 0, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var result struct {
 		Data []struct {

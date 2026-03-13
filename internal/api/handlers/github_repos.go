@@ -95,7 +95,7 @@ func listGitHubUserRepos(ctx context.Context, token string) ([]githubRepoRespons
 	if err != nil {
 		return nil, fmt.Errorf("do request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("github API returned status %d", resp.StatusCode)
@@ -132,7 +132,7 @@ func searchGitHubRepos(ctx context.Context, token, query string) ([]githubRepoRe
 	if err != nil {
 		return nil, fmt.Errorf("do request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("github search API returned status %d", resp.StatusCode)
@@ -163,7 +163,7 @@ func fetchGitHubLogin(ctx context.Context, token string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("github API returned status %d", resp.StatusCode)

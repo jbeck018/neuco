@@ -443,22 +443,22 @@ func (c *LLMClient) doWithRetry(
 		}
 
 		if resp.StatusCode == http.StatusTooManyRequests {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			lastErr = fmt.Errorf("rate limited (429) from %s", url)
 			continue
 		}
 
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			return fmt.Errorf("unexpected status %d from %s: %s", resp.StatusCode, url, string(errBody))
 		}
 
 		if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			return fmt.Errorf("decode response: %w", err)
 		}
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		return nil
 	}
 

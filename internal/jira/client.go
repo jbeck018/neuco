@@ -87,7 +87,7 @@ func (c *Client) ExchangeCode(ctx context.Context, code, redirectURI string) (*T
 	if err != nil {
 		return nil, fmt.Errorf("jira.ExchangeCode: request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode != http.StatusOK {
@@ -121,7 +121,7 @@ func (c *Client) GetAccessibleSites(ctx context.Context, accessToken string) ([]
 	if err != nil {
 		return nil, fmt.Errorf("jira.GetAccessibleSites: request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode != http.StatusOK {
@@ -226,7 +226,7 @@ func (c *Client) ListIssues(ctx context.Context, accessToken, cloudID string, si
 		if err != nil {
 			return nil, fmt.Errorf("jira.ListIssues: request: %w", err)
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 		if resp.StatusCode != http.StatusOK {

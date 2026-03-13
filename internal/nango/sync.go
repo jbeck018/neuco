@@ -97,7 +97,7 @@ func (s *SyncService) SyncGongSince(ctx context.Context, connectionID string, pr
 		}
 
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20)) // 2 MiB
-		resp.Body.Close()
+		_ = resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
 			return nil, fmt.Errorf("nango.SyncGong: list calls: status %d: %s", resp.StatusCode, string(respBody))
@@ -220,7 +220,7 @@ func (s *SyncService) fetchGongTranscripts(
 		slog.Warn("nango.SyncGong: fetch transcripts failed", "error", err)
 		return result
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
@@ -254,7 +254,7 @@ func (s *SyncService) fetchGongTranscripts(
 		var sb strings.Builder
 		for _, seg := range ct.Transcript {
 			if seg.Topic != "" {
-				sb.WriteString(fmt.Sprintf("[Topic: %s]\n", seg.Topic))
+				fmt.Fprintf(&sb, "[Topic: %s]\n", seg.Topic)
 			}
 			for _, sent := range seg.Sentences {
 				sb.WriteString(sent.Text)
@@ -281,7 +281,7 @@ func (s *SyncService) SyncIntercom(ctx context.Context, connectionID string, pro
 	if err != nil {
 		return nil, fmt.Errorf("nango.SyncIntercom: proxy request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
@@ -367,7 +367,7 @@ func (s *SyncService) SyncSlack(ctx context.Context, connectionID string, projec
 	if err != nil {
 		return nil, fmt.Errorf("nango.SyncSlack: proxy request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
@@ -445,7 +445,7 @@ func (s *SyncService) resolveSlackChannel(ctx context.Context, connectionID stri
 	if err != nil {
 		return "", fmt.Errorf("proxy request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
@@ -483,7 +483,7 @@ func (s *SyncService) SyncGeneric(
 	if err != nil {
 		return nil, fmt.Errorf("nango.SyncGeneric: proxy request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20)) // 1 MiB cap
 	if err != nil {

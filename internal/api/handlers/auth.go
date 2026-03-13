@@ -67,7 +67,7 @@ func fetchGitHubUser(ctx context.Context, accessToken string) (*githubUser, erro
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("github API returned status %d", resp.StatusCode)
@@ -275,7 +275,7 @@ func fetchGoogleUser(ctx context.Context, accessToken string) (*googleUser, erro
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("google userinfo API returned status %d", resp.StatusCode)

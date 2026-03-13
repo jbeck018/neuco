@@ -73,7 +73,7 @@ func (c *Client) ExchangeCode(ctx context.Context, code, redirectURI string) (*T
 	if err != nil {
 		return nil, fmt.Errorf("intercom.ExchangeCode: request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode != http.StatusOK {
@@ -173,7 +173,7 @@ func (c *Client) ListConversations(ctx context.Context, accessToken string, sinc
 		}
 
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
-		resp.Body.Close()
+		_ = resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
 			return nil, fmt.Errorf("intercom.ListConversations: status %d: %s", resp.StatusCode, string(body))
@@ -211,7 +211,7 @@ func (c *Client) GetConversation(ctx context.Context, accessToken, conversationI
 	if err != nil {
 		return nil, fmt.Errorf("intercom.GetConversation: request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 	if resp.StatusCode != http.StatusOK {

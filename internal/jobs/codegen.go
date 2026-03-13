@@ -515,7 +515,7 @@ Rules:
 	if err != nil {
 		return nil, nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var result anthropicResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
@@ -786,7 +786,7 @@ func buildPRBody(gen *domain.Generation, spec *domain.Spec) string {
 	if len(gen.Files) > 0 {
 		sb.WriteString("### Generated Files\n\n")
 		for _, f := range gen.Files {
-			sb.WriteString(fmt.Sprintf("- `%s`\n", f.Path))
+			fmt.Fprintf(&sb, "- `%s`\n", f.Path)
 		}
 		sb.WriteString("\n")
 	}

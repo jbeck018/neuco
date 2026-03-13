@@ -259,6 +259,15 @@ func runMigrations(t *testing.T, pool *pgxpool.Pool) {
 		t.Fatalf("failed to run migration 000015: %v", err)
 	}
 
+	// Migration 000016 (expand signal types)
+	migration16, err := os.ReadFile("../../migrations/000016_expand_signal_types.up.sql")
+	if err != nil {
+		t.Fatalf("failed to read migration 000016: %v", err)
+	}
+	if _, err := pool.Exec(ctx, string(migration16)); err != nil {
+		t.Fatalf("failed to run migration 000016: %v", err)
+	}
+
 	// River queue tables (required for river.Insert calls in handlers).
 	// Use the official rivermigrate API to create the correct schema.
 	migrator, err := rivermigrate.New(riverpgxv5.New(pool), nil)
@@ -417,12 +426,19 @@ func doRequest(t *testing.T, method, url string, body any, token string) *http.R
 
 func readBody(t *testing.T, resp *http.Response) []byte {
 	t.Helper()
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatalf("readBody: %v", err)
 	}
 	return b
+}
+
+func mustUnmarshal(t *testing.T, data []byte, v any) {
+	t.Helper()
+	if err := json.Unmarshal(data, v); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
 }
 
 func assertStatus(t *testing.T, resp *http.Response, expected int) {
@@ -535,7 +551,9 @@ func TestOrgCRUD(t *testing.T) {
 
 		body := readBody(t, resp)
 		var org domain.Organization
-		json.Unmarshal(body, &org)
+		if err := json.Unmarshal(body, &org); err != nil {
+			t.Fatalf("unmarshal org: %v", err)
+		}
 		if org.ID != sd.orgA.ID {
 			t.Errorf("expected org ID %s, got %s", sd.orgA.ID, org.ID)
 		}
@@ -574,7 +592,9 @@ func TestProjectCRUD(t *testing.T) {
 		assertStatus(t, resp, http.StatusCreated)
 
 		var project domain.Project
-		json.Unmarshal(readBody(t, resp), &project)
+		if err := json.Unmarshal(readBody(t, resp), &project); err != nil {
+			t.Fatalf("unmarshal project: %v", err)
+		}
 		if project.Name != "Test Project" {
 			t.Errorf("expected project name 'Test Project', got %q", project.Name)
 		}
@@ -586,7 +606,9 @@ func TestProjectCRUD(t *testing.T) {
 		assertStatus(t, resp, http.StatusOK)
 
 		var projects []domain.Project
-		json.Unmarshal(readBody(t, resp), &projects)
+		if err := json.Unmarshal(readBody(t, resp), &projects); err != nil {
+			t.Fatalf("unmarshal projects: %v", err)
+		}
 		if len(projects) == 0 {
 			t.Error("expected at least one project")
 		}
@@ -609,7 +631,9 @@ func TestProjectCRUD(t *testing.T) {
 		assertStatus(t, resp, http.StatusOK)
 
 		var project domain.Project
-		json.Unmarshal(readBody(t, resp), &project)
+		if err := json.Unmarshal(readBody(t, resp), &project); err != nil {
+			t.Fatalf("unmarshal project: %v", err)
+		}
 		if project.Name != "Renamed Project" {
 			t.Errorf("expected 'Renamed Project', got %q", project.Name)
 		}
@@ -669,7 +693,9 @@ func TestSignalUpload(t *testing.T) {
 		var result struct {
 			Inserted int `json:"inserted"`
 		}
-		json.Unmarshal(body, &result)
+		if err := json.Unmarshal(body, &result); err != nil {
+			t.Fatalf("unmarshal result: %v", err)
+		}
 		if result.Inserted < 1 {
 			t.Errorf("expected at least 1 inserted signal, got %d", result.Inserted)
 		}
@@ -749,7 +775,9 @@ func TestSpecGeneration(t *testing.T) {
 			Candidates []map[string]any `json:"candidates"`
 			Total      int              `json:"total"`
 		}
-		json.Unmarshal(body, &page)
+		if err := json.Unmarshal(body, &page); err != nil {
+			t.Fatalf("unmarshal page: %v", err)
+		}
 		if len(page.Candidates) == 0 {
 			t.Error("expected at least one candidate")
 		}
@@ -764,7 +792,9 @@ func TestSpecGeneration(t *testing.T) {
 				ID string `json:"id"`
 			} `json:"candidates"`
 		}
-		json.Unmarshal(readBody(t, resp), &page)
+		if err := json.Unmarshal(readBody(t, resp), &page); err != nil {
+			t.Fatalf("unmarshal page: %v", err)
+		}
 		if len(page.Candidates) == 0 {
 			t.Skip("no candidates to test spec generation")
 		}
@@ -814,7 +844,9 @@ func TestPipelineVisibility(t *testing.T) {
 			Runs  []map[string]any `json:"runs"`
 			Total int              `json:"total"`
 		}
-		json.Unmarshal(body, &page)
+		if err := json.Unmarshal(body, &page); err != nil {
+			t.Fatalf("unmarshal page: %v", err)
+		}
 		if len(page.Runs) == 0 {
 			t.Error("expected at least one pipeline run")
 		}
@@ -878,7 +910,9 @@ func TestWebhookIngestion(t *testing.T) {
 			SignalID string `json:"signal_id"`
 			Status   string `json:"status"`
 		}
-		json.Unmarshal(body, &result)
+		if err := json.Unmarshal(body, &result); err != nil {
+			t.Fatalf("unmarshal result: %v", err)
+		}
 		if result.Status != "accepted" {
 			t.Errorf("expected status 'accepted', got %q", result.Status)
 		}
@@ -1054,7 +1088,7 @@ func TestOperatorFlagsCRUD(t *testing.T) {
 		assertStatus(t, resp, http.StatusOK)
 
 		var flags []map[string]any
-		json.Unmarshal(readBody(t, resp), &flags)
+		mustUnmarshal(t, readBody(t, resp), &flags)
 		if len(flags) == 0 {
 			t.Error("expected seeded feature flags")
 		}
@@ -1078,7 +1112,7 @@ func TestOperatorFlagsCRUD(t *testing.T) {
 		assertStatus(t, resp, http.StatusOK)
 
 		var flag map[string]any
-		json.Unmarshal(readBody(t, resp), &flag)
+		mustUnmarshal(t, readBody(t, resp), &flag)
 		if flag["enabled"] != true {
 			t.Error("expected flag to be enabled")
 		}
@@ -1090,7 +1124,7 @@ func TestOperatorFlagsCRUD(t *testing.T) {
 		assertStatus(t, resp, http.StatusOK)
 
 		var flag map[string]any
-		json.Unmarshal(readBody(t, resp), &flag)
+		mustUnmarshal(t, readBody(t, resp), &flag)
 		if flag["enabled"] != false {
 			t.Error("expected flag to be disabled")
 		}
@@ -1124,7 +1158,7 @@ func TestOnboardingFlow(t *testing.T) {
 		assertStatus(t, resp, http.StatusOK)
 
 		var status domain.OnboardingStatus
-		json.Unmarshal(readBody(t, resp), &status)
+		mustUnmarshal(t, readBody(t, resp), &status)
 		if status.IsComplete {
 			t.Error("expected onboarding not complete initially")
 		}
@@ -1142,7 +1176,7 @@ func TestOnboardingFlow(t *testing.T) {
 		assertStatus(t, resp, http.StatusOK)
 
 		var status domain.OnboardingStatus
-		json.Unmarshal(readBody(t, resp), &status)
+		mustUnmarshal(t, readBody(t, resp), &status)
 		if len(status.CompletedSteps) != 1 {
 			t.Errorf("expected 1 completed step, got %d", len(status.CompletedSteps))
 		}
@@ -1162,7 +1196,7 @@ func TestOnboardingFlow(t *testing.T) {
 		assertStatus(t, resp, http.StatusOK)
 
 		var status domain.OnboardingStatus
-		json.Unmarshal(readBody(t, resp), &status)
+		mustUnmarshal(t, readBody(t, resp), &status)
 		if len(status.CompletedSteps) != 3 {
 			t.Errorf("expected 3 completed steps, got %d", len(status.CompletedSteps))
 		}
@@ -1179,7 +1213,7 @@ func TestOnboardingFlow(t *testing.T) {
 		assertStatus(t, resp, http.StatusOK)
 
 		var status domain.OnboardingStatus
-		json.Unmarshal(readBody(t, resp), &status)
+		mustUnmarshal(t, readBody(t, resp), &status)
 		if !status.IsComplete {
 			t.Error("expected onboarding to be complete after skip")
 		}
@@ -1203,7 +1237,7 @@ func TestBillingSubscription(t *testing.T) {
 		assertStatus(t, resp, http.StatusOK)
 
 		var result map[string]any
-		json.Unmarshal(readBody(t, resp), &result)
+		mustUnmarshal(t, readBody(t, resp), &result)
 		if result["subscription"] != nil {
 			t.Error("expected null subscription for new org")
 		}
@@ -1214,7 +1248,7 @@ func TestBillingSubscription(t *testing.T) {
 		assertStatus(t, resp, http.StatusOK)
 
 		var usage domain.UsageSummary
-		json.Unmarshal(readBody(t, resp), &usage)
+		mustUnmarshal(t, readBody(t, resp), &usage)
 		if usage.Limits.MaxProjects != 1 {
 			t.Errorf("expected free tier max_projects=1, got %d", usage.Limits.MaxProjects)
 		}
@@ -1248,7 +1282,7 @@ func TestBillingSubscription(t *testing.T) {
 			Subscription *domain.Subscription `json:"subscription"`
 			Limits       domain.PlanLimits    `json:"limits"`
 		}
-		json.Unmarshal(readBody(t, resp), &result)
+		mustUnmarshal(t, readBody(t, resp), &result)
 		if result.Subscription == nil {
 			t.Fatal("expected non-null subscription")
 		}
@@ -1268,7 +1302,7 @@ func TestBillingSubscription(t *testing.T) {
 		assertStatus(t, resp, http.StatusOK)
 
 		var usage domain.UsageSummary
-		json.Unmarshal(readBody(t, resp), &usage)
+		mustUnmarshal(t, readBody(t, resp), &usage)
 		if usage.PlanTier == nil || *usage.PlanTier != domain.PlanTierStarter {
 			t.Error("expected starter plan tier in usage")
 		}
@@ -1283,7 +1317,7 @@ func TestBillingSubscription(t *testing.T) {
 		// Should fail — orgB token cannot access orgA routes.
 		if resp.StatusCode == http.StatusOK {
 			var result map[string]any
-			json.Unmarshal(readBody(t, resp), &result)
+			mustUnmarshal(t, readBody(t, resp), &result)
 			if result["subscription"] != nil {
 				t.Error("orgB should not see orgA subscription")
 			}
@@ -1339,7 +1373,7 @@ func TestUsageLimitEnforcement(t *testing.T) {
 		assertStatus(t, resp, http.StatusTooManyRequests)
 
 		var result map[string]any
-		json.Unmarshal(readBody(t, resp), &result)
+		mustUnmarshal(t, readBody(t, resp), &result)
 		if result["code"] != "usage_limit_exceeded" {
 			t.Errorf("expected code 'usage_limit_exceeded', got %v", result["code"])
 		}
@@ -1416,7 +1450,7 @@ func TestLLMUsageTracking(t *testing.T) {
 		assertStatus(t, resp, http.StatusOK)
 
 		var agg domain.LLMUsageAgg
-		json.Unmarshal(readBody(t, resp), &agg)
+		mustUnmarshal(t, readBody(t, resp), &agg)
 		if agg.TotalCalls != 3 {
 			t.Errorf("expected 3 total calls, got %d", agg.TotalCalls)
 		}
@@ -1433,7 +1467,7 @@ func TestLLMUsageTracking(t *testing.T) {
 		assertStatus(t, resp, http.StatusOK)
 
 		var agg domain.LLMUsageAgg
-		json.Unmarshal(readBody(t, resp), &agg)
+		mustUnmarshal(t, readBody(t, resp), &agg)
 		if agg.TotalCalls != 3 {
 			t.Errorf("expected 3 calls for pipeline, got %d", agg.TotalCalls)
 		}
@@ -1447,7 +1481,7 @@ func TestLLMUsageTracking(t *testing.T) {
 			Calls []domain.LLMCall `json:"calls"`
 			Total int              `json:"total"`
 		}
-		json.Unmarshal(readBody(t, resp), &page)
+		mustUnmarshal(t, readBody(t, resp), &page)
 		if page.Total != 3 {
 			t.Errorf("expected total 3, got %d", page.Total)
 		}
@@ -1461,7 +1495,7 @@ func TestLLMUsageTracking(t *testing.T) {
 		assertStatus(t, resp, http.StatusOK)
 
 		var agg domain.LLMUsageAgg
-		json.Unmarshal(readBody(t, resp), &agg)
+		mustUnmarshal(t, readBody(t, resp), &agg)
 		if agg.TotalCalls != 3 {
 			t.Errorf("expected 3 calls at org level, got %d", agg.TotalCalls)
 		}
@@ -1510,7 +1544,7 @@ func TestSlackWebhook(t *testing.T) {
 		assertStatus(t, resp, http.StatusOK)
 
 		var result map[string]string
-		json.Unmarshal(readBody(t, resp), &result)
+		mustUnmarshal(t, readBody(t, resp), &result)
 		if result["challenge"] != "test_challenge_value_12345" {
 			t.Errorf("expected challenge echoed back, got %q", result["challenge"])
 		}
@@ -1741,7 +1775,7 @@ func TestUsageIncrementAndQuery(t *testing.T) {
 		assertStatus(t, resp, http.StatusOK)
 
 		var usage domain.UsageSummary
-		json.Unmarshal(readBody(t, resp), &usage)
+		mustUnmarshal(t, readBody(t, resp), &usage)
 		if usage.SignalsUsed != 5 {
 			t.Errorf("expected 5 signals used, got %d", usage.SignalsUsed)
 		}
@@ -1762,7 +1796,7 @@ func TestUsageIncrementAndQuery(t *testing.T) {
 		assertStatus(t, resp, http.StatusOK)
 
 		var usage domain.UsageSummary
-		json.Unmarshal(readBody(t, resp), &usage)
+		mustUnmarshal(t, readBody(t, resp), &usage)
 		if usage.SignalsUsed != 8 {
 			t.Errorf("expected 8 signals used after second increment, got %d", usage.SignalsUsed)
 		}
@@ -1787,7 +1821,7 @@ func TestWebhookFullFlow(t *testing.T) {
 	assertStatus(t, resp, http.StatusCreated)
 
 	var project domain.Project
-	json.Unmarshal(readBody(t, resp), &project)
+	mustUnmarshal(t, readBody(t, resp), &project)
 
 	t.Run("create_webhook_integration_via_api", func(t *testing.T) {
 		// Step 2: Create a webhook integration via the API.
@@ -1796,7 +1830,7 @@ func TestWebhookFullFlow(t *testing.T) {
 		assertStatus(t, resp, http.StatusCreated)
 
 		var created domain.Integration
-		json.Unmarshal(readBody(t, resp), &created)
+		mustUnmarshal(t, readBody(t, resp), &created)
 		if created.Provider != "webhook" {
 			t.Errorf("expected provider 'webhook', got %q", created.Provider)
 		}
@@ -1819,7 +1853,7 @@ func TestWebhookFullFlow(t *testing.T) {
 			SignalID string `json:"signal_id"`
 			Status   string `json:"status"`
 		}
-		json.Unmarshal(readBody(t, resp), &webhookResult)
+		mustUnmarshal(t, readBody(t, resp), &webhookResult)
 		if webhookResult.Status != "accepted" {
 			t.Errorf("expected status 'accepted', got %q", webhookResult.Status)
 		}
@@ -1832,7 +1866,7 @@ func TestWebhookFullFlow(t *testing.T) {
 			Signals []domain.Signal `json:"signals"`
 			Total   int            `json:"total"`
 		}
-		json.Unmarshal(readBody(t, resp), &signalPage)
+		mustUnmarshal(t, readBody(t, resp), &signalPage)
 		if signalPage.Total == 0 {
 			t.Fatal("expected at least 1 signal in the signals list")
 		}
@@ -1841,8 +1875,8 @@ func TestWebhookFullFlow(t *testing.T) {
 		for _, sig := range signalPage.Signals {
 			if sig.Content == "Enterprise customer needs SSO integration" {
 				foundSignal = true
-				if string(sig.Source) != "sales_call" {
-					t.Errorf("expected source 'sales_call', got %q", sig.Source)
+				if string(sig.Source) != "webhook" {
+					t.Errorf("expected source 'webhook', got %q", sig.Source)
 				}
 				if string(sig.Type) != "feature_request" {
 					t.Errorf("expected type 'feature_request', got %q", sig.Type)
@@ -1896,7 +1930,7 @@ func TestWebhookDeduplication(t *testing.T) {
 			SignalID string `json:"signal_id"`
 			Status   string `json:"status"`
 		}
-		json.Unmarshal(readBody(t, resp), &result1)
+		mustUnmarshal(t, readBody(t, resp), &result1)
 		if result1.Status != "accepted" {
 			t.Fatalf("first submission: expected 'accepted', got %q", result1.Status)
 		}
@@ -1909,7 +1943,7 @@ func TestWebhookDeduplication(t *testing.T) {
 			SignalID string `json:"signal_id"`
 			Status   string `json:"status"`
 		}
-		json.Unmarshal(readBody(t, resp), &result2)
+		mustUnmarshal(t, readBody(t, resp), &result2)
 		if result2.Status != "deduplicated" {
 			t.Errorf("second submission: expected 'deduplicated', got %q", result2.Status)
 		}
@@ -1926,7 +1960,7 @@ func TestWebhookDeduplication(t *testing.T) {
 		var result struct {
 			Status string `json:"status"`
 		}
-		json.Unmarshal(readBody(t, resp), &result)
+		mustUnmarshal(t, readBody(t, resp), &result)
 		if result.Status != "accepted" {
 			t.Errorf("different content: expected 'accepted', got %q", result.Status)
 		}
@@ -1956,7 +1990,7 @@ func TestIntegrationCRUD(t *testing.T) {
 		assertStatus(t, resp, http.StatusCreated)
 
 		var intg domain.Integration
-		json.Unmarshal(readBody(t, resp), &intg)
+		mustUnmarshal(t, readBody(t, resp), &intg)
 		if intg.Provider != "webhook" {
 			t.Errorf("expected provider 'webhook', got %q", intg.Provider)
 		}
@@ -1972,7 +2006,7 @@ func TestIntegrationCRUD(t *testing.T) {
 		assertStatus(t, resp, http.StatusOK)
 
 		var intgs []domain.Integration
-		json.Unmarshal(readBody(t, resp), &intgs)
+		mustUnmarshal(t, readBody(t, resp), &intgs)
 		if len(intgs) == 0 {
 			t.Fatal("expected at least one integration")
 		}
@@ -1991,7 +2025,7 @@ func TestIntegrationCRUD(t *testing.T) {
 		assertStatus(t, resp, http.StatusOK)
 
 		var intg domain.Integration
-		json.Unmarshal(readBody(t, resp), &intg)
+		mustUnmarshal(t, readBody(t, resp), &intg)
 		if intg.WebhookSecret != "" {
 			t.Error("webhook_secret should be hidden in get response")
 		}

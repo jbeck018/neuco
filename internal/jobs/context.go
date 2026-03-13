@@ -204,7 +204,7 @@ Respond in JSON: {"insights": [{"category": "...", "title": "...", "content": ".
 	if err != nil {
 		return nil, nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var result anthropicResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {

@@ -285,7 +285,7 @@ func IssueToSignal(issue Issue, projectID uuid.UUID) domain.Signal {
 		if comment.Body != "" {
 			content.WriteString("\n\n---\n\n")
 			if comment.User != nil && comment.User.Name != "" {
-				content.WriteString(fmt.Sprintf("[%s]: ", comment.User.Name))
+				fmt.Fprintf(&content, "[%s]: ", comment.User.Name)
 			}
 			content.WriteString(comment.Body)
 		}

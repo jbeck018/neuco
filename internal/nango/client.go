@@ -76,7 +76,7 @@ func (c *Client) CreateConnectSession(ctx context.Context, endUserID, endUserEma
 	if err != nil {
 		return "", fmt.Errorf("nango: create connect session: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		respBody, _ := io.ReadAll(resp.Body)
@@ -117,7 +117,7 @@ func (c *Client) ListConnections(ctx context.Context, providerConfigKey string) 
 	if err != nil {
 		return nil, fmt.Errorf("nango: list connections: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("nango: list connections: unexpected status %d", resp.StatusCode)
@@ -154,7 +154,7 @@ func (c *Client) GetConnection(ctx context.Context, providerConfigKey, connectio
 	if err != nil {
 		return nil, fmt.Errorf("nango: get connection: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, fmt.Errorf("nango: get connection: not found (provider=%s connection=%s)", providerConfigKey, connectionID)
@@ -190,7 +190,7 @@ func (c *Client) DeleteConnection(ctx context.Context, providerConfigKey, connec
 	if err != nil {
 		return fmt.Errorf("nango: delete connection: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return fmt.Errorf("nango: delete connection: not found (provider=%s connection=%s)", providerConfigKey, connectionID)
