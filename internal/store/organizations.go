@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -114,6 +115,16 @@ func (s *Store) DeleteOrg(ctx context.Context, id uuid.UUID) error {
 		return fmt.Errorf("store.DeleteOrg: org %s not found", id)
 	}
 	return nil
+}
+
+// GetOrgCreatedAt returns the creation timestamp for an org.
+func (s *Store) GetOrgCreatedAt(ctx context.Context, id uuid.UUID) (time.Time, error) {
+	const q = `SELECT created_at FROM organizations WHERE id = $1`
+	var t time.Time
+	if err := s.pool.QueryRow(ctx, q, id).Scan(&t); err != nil {
+		return time.Time{}, fmt.Errorf("store.GetOrgCreatedAt: %w", err)
+	}
+	return t, nil
 }
 
 // scanOrg reads a single Organization from any pgx row-like value.

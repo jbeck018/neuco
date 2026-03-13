@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -14,10 +16,11 @@ import (
 
 // SignalFilters holds optional filter criteria for ListProjectSignals.
 type SignalFilters struct {
-	Sources    []string   // domain.SignalSource values; nil means no filter
-	Types      []string   // domain.SignalType values; nil means no filter
-	From       *time.Time // inclusive lower bound on occurred_at
-	To         *time.Time // inclusive upper bound on occurred_at
+	Sources           []string   // domain.SignalSource values; nil means no filter
+	Types             []string   // domain.SignalType values; nil means no filter
+	From              *time.Time // inclusive lower bound on occurred_at
+	To                *time.Time // inclusive upper bound on occurred_at
+	ExcludeDuplicates bool       // if true, omit signals where duplicate_of_id IS NOT NULL
 }
 
 // SignalPage is the result type for paginated signal queries.
@@ -28,20 +31,34 @@ type SignalPage struct {
 
 const signalColumns = `
 	id, project_id, source, source_ref, type, content, metadata,
-	occurred_at, ingested_at`
+	occurred_at, ingested_at, content_hash, duplicate_of_id`
+
+// ErrDuplicateSignal is returned when an exact content hash match is found
+// in the same project during insertion.
+var ErrDuplicateSignal = fmt.Errorf("duplicate signal")
 
 // InsertSignal writes a single signal to the database and returns it with the
-// server-assigned ID and ingested_at timestamp.
+// server-assigned ID and ingested_at timestamp. If an exact content-hash
+// duplicate exists in the same project, ErrDuplicateSignal is returned along
+// with the existing signal.
 func (s *Store) InsertSignal(ctx context.Context, sig domain.Signal) (domain.Signal, error) {
 	meta := sig.Metadata
 	if meta == nil {
 		meta = json.RawMessage(`{}`)
 	}
 
+	hash := ContentHash(sig.Content)
+
+	// Check for exact duplicate by content hash within the same project.
+	existing, err := s.findByContentHash(ctx, sig.ProjectID, hash)
+	if err == nil {
+		return existing, ErrDuplicateSignal
+	}
+
 	const q = `
 		INSERT INTO signals
-		       (project_id, source, source_ref, type, content, metadata, occurred_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		       (project_id, source, source_ref, type, content, metadata, occurred_at, content_hash)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING ` + signalColumns
 
 	row := s.pool.QueryRow(ctx, q,
@@ -52,6 +69,7 @@ func (s *Store) InsertSignal(ctx context.Context, sig domain.Signal) (domain.Sig
 		sig.Content,
 		meta,
 		sig.OccurredAt,
+		hash,
 	)
 	return scanSignal(row)
 }
@@ -65,13 +83,27 @@ func (s *Store) InsertSignalTx(ctx context.Context, tx pgx.Tx, sig domain.Signal
 		meta = json.RawMessage(`{}`)
 	}
 
+	hash := ContentHash(sig.Content)
+
+	// Check for exact duplicate within the transaction.
+	const checkQ = `
+		SELECT ` + signalColumns + `
+		FROM   signals
+		WHERE  project_id = $1 AND content_hash = $2 AND duplicate_of_id IS NULL
+		LIMIT  1`
+	row := tx.QueryRow(ctx, checkQ, sig.ProjectID, hash)
+	existing, err := scanSignal(row)
+	if err == nil {
+		return existing, ErrDuplicateSignal
+	}
+
 	const q = `
 		INSERT INTO signals
-		       (project_id, source, source_ref, type, content, metadata, occurred_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		       (project_id, source, source_ref, type, content, metadata, occurred_at, content_hash)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING ` + signalColumns
 
-	row := tx.QueryRow(ctx, q,
+	row = tx.QueryRow(ctx, q,
 		sig.ProjectID,
 		sig.Source,
 		sig.SourceRef,
@@ -79,6 +111,7 @@ func (s *Store) InsertSignalTx(ctx context.Context, tx pgx.Tx, sig domain.Signal
 		sig.Content,
 		meta,
 		sig.OccurredAt,
+		hash,
 	)
 	return scanSignal(row)
 }
@@ -126,6 +159,9 @@ func (s *Store) ListProjectSignals(
 	if filters.To != nil {
 		args = append(args, *filters.To)
 		conds = append(conds, fmt.Sprintf("occurred_at <= $%d", len(args)))
+	}
+	if filters.ExcludeDuplicates {
+		conds = append(conds, "duplicate_of_id IS NULL")
 	}
 
 	where := "WHERE " + strings.Join(conds, " AND ")
@@ -215,6 +251,8 @@ func (s *Store) ListUnembeddedSignals(ctx context.Context, projectID uuid.UUID, 
 func scanSignal(row pgx.Row) (domain.Signal, error) {
 	var sig domain.Signal
 	var meta []byte
+	var contentHash *string
+	var duplicateOfID *uuid.UUID
 	err := row.Scan(
 		&sig.ID,
 		&sig.ProjectID,
@@ -225,6 +263,8 @@ func scanSignal(row pgx.Row) (domain.Signal, error) {
 		&meta,
 		&sig.OccurredAt,
 		&sig.IngestedAt,
+		&contentHash,
+		&duplicateOfID,
 	)
 	if err != nil {
 		return domain.Signal{}, err
@@ -234,6 +274,10 @@ func scanSignal(row pgx.Row) (domain.Signal, error) {
 	} else {
 		sig.Metadata = json.RawMessage(`{}`)
 	}
+	if contentHash != nil {
+		sig.ContentHash = *contentHash
+	}
+	sig.DuplicateOfID = duplicateOfID
 	return sig, nil
 }
 
@@ -251,6 +295,70 @@ func collectSignals(rows pgx.Rows) ([]domain.Signal, error) {
 		return nil, fmt.Errorf("rows: %w", err)
 	}
 	return sigs, nil
+}
+
+// ContentHash returns the SHA-256 hex digest of normalised (lower-cased,
+// trimmed) content, used for exact deduplication.
+func ContentHash(content string) string {
+	normalised := strings.ToLower(strings.TrimSpace(content))
+	h := sha256.Sum256([]byte(normalised))
+	return hex.EncodeToString(h[:])
+}
+
+// findByContentHash looks up a non-duplicate signal with the given content hash
+// in a project. Returns the signal if found, otherwise an error.
+func (s *Store) findByContentHash(ctx context.Context, projectID uuid.UUID, hash string) (domain.Signal, error) {
+	const q = `
+		SELECT ` + signalColumns + `
+		FROM   signals
+		WHERE  project_id = $1 AND content_hash = $2 AND duplicate_of_id IS NULL
+		LIMIT  1`
+
+	row := s.pool.QueryRow(ctx, q, projectID, hash)
+	return scanSignal(row)
+}
+
+// FindNearDuplicateSignal searches for an existing signal in the same project
+// whose embedding has cosine similarity >= threshold to the given embedding.
+// Returns the matching signal ID or nil if no near-duplicate exists.
+func (s *Store) FindNearDuplicateSignal(ctx context.Context, projectID uuid.UUID, signalID uuid.UUID, embedding []float32, threshold float64) (*uuid.UUID, error) {
+	lit := float32SliceToVectorLiteral(embedding)
+	const q = `
+		SELECT id
+		FROM   signals
+		WHERE  project_id = $1
+		  AND  id != $2
+		  AND  duplicate_of_id IS NULL
+		  AND  embedding IS NOT NULL
+		  AND  1 - (embedding <=> $3::vector) >= $4
+		ORDER  BY embedding <=> $3::vector
+		LIMIT  1`
+
+	var matchID uuid.UUID
+	err := s.pool.QueryRow(ctx, q, projectID, signalID, lit, threshold).Scan(&matchID)
+	if err != nil {
+		return nil, err
+	}
+	return &matchID, nil
+}
+
+// MarkAsDuplicate sets the duplicate_of_id field on a signal.
+func (s *Store) MarkAsDuplicate(ctx context.Context, signalID, originalID uuid.UUID) error {
+	const q = `UPDATE signals SET duplicate_of_id = $2 WHERE id = $1`
+	_, err := s.pool.Exec(ctx, q, signalID, originalID)
+	if err != nil {
+		return fmt.Errorf("store.MarkAsDuplicate: %w", err)
+	}
+	return nil
+}
+
+// DuplicateCount returns the number of signals that are duplicates of a given
+// original signal.
+func (s *Store) DuplicateCount(ctx context.Context, signalID uuid.UUID) (int, error) {
+	const q = `SELECT COUNT(*) FROM signals WHERE duplicate_of_id = $1`
+	var count int
+	err := s.pool.QueryRow(ctx, q, signalID).Scan(&count)
+	return count, err
 }
 
 // float32SliceToVectorLiteral converts a []float32 to a pgvector literal

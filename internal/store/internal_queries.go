@@ -236,6 +236,60 @@ func (s *Store) ListAllActiveProjects(ctx context.Context) ([]domain.Project, er
 	return projects, rows.Err()
 }
 
+// GetIntegrationInternal fetches an integration by ID without tenant scoping
+// (for workers that need to look up last_sync_at).
+func (s *Store) GetIntegrationInternal(ctx context.Context, integrationID uuid.UUID) (domain.Integration, error) {
+	const q = `SELECT ` + integrationColumns + ` FROM integrations WHERE id = $1`
+	row := s.pool.QueryRow(ctx, q, integrationID)
+	intg, err := scanIntegration(row)
+	if err != nil {
+		return domain.Integration{}, fmt.Errorf("store.GetIntegrationInternal: %w", err)
+	}
+	return intg, nil
+}
+
+// ListActiveIntegrationsInternal returns all active integrations for a given
+// provider (e.g. "gong", "intercom"). Used by the periodic sync worker.
+func (s *Store) ListActiveIntegrationsInternal(ctx context.Context, provider string) ([]domain.Integration, error) {
+	const q = `SELECT ` + integrationColumns + ` FROM integrations WHERE provider = $1 AND is_active = true ORDER BY created_at`
+	rows, err := s.pool.Query(ctx, q, provider)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListActiveIntegrationsInternal: %w", err)
+	}
+	defer rows.Close()
+
+	var intgs []domain.Integration
+	for rows.Next() {
+		intg, err := scanIntegration(rows)
+		if err != nil {
+			return nil, fmt.Errorf("store.ListActiveIntegrationsInternal: scan: %w", err)
+		}
+		intgs = append(intgs, intg)
+	}
+	return intgs, rows.Err()
+}
+
+// ListAllActiveIntegrationsInternal returns all active non-webhook integrations.
+// Used by the periodic sync worker to trigger syncs across all providers.
+func (s *Store) ListAllActiveIntegrationsInternal(ctx context.Context) ([]domain.Integration, error) {
+	const q = `SELECT ` + integrationColumns + ` FROM integrations WHERE is_active = true AND provider != 'webhook' ORDER BY created_at`
+	rows, err := s.pool.Query(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListAllActiveIntegrationsInternal: %w", err)
+	}
+	defer rows.Close()
+
+	var intgs []domain.Integration
+	for rows.Next() {
+		intg, err := scanIntegration(rows)
+		if err != nil {
+			return nil, fmt.Errorf("store.ListAllActiveIntegrationsInternal: scan: %w", err)
+		}
+		intgs = append(intgs, intg)
+	}
+	return intgs, rows.Err()
+}
+
 // GetProjectStats returns aggregate counters for the project dashboard.
 func (s *Store) GetProjectStats(ctx context.Context, projectID uuid.UUID) (ProjectStats, error) {
 	const q = `
@@ -256,6 +310,114 @@ func (s *Store) GetProjectStats(ctx context.Context, projectID uuid.UUID) (Proje
 		return ProjectStats{}, fmt.Errorf("store.GetProjectStats: %w", err)
 	}
 	return stats, nil
+}
+
+// OrgWeeklyStats holds aggregate counts for the past 7 days for a single org.
+type OrgWeeklyStats struct {
+	SignalCount    int
+	CandidateCount int
+	SpecCount      int
+	PRCount        int
+}
+
+// ProjectWeeklyStats holds per-project stats for the past 7 days.
+type ProjectWeeklyStats struct {
+	ProjectName string
+	SignalCount int
+	PRCount     int
+}
+
+// GetOrgWeeklyStats returns aggregate counts for the past 7 days across all projects in an org.
+func (s *Store) GetOrgWeeklyStats(ctx context.Context, orgID uuid.UUID) (OrgWeeklyStats, error) {
+	const q = `
+		SELECT
+			(SELECT COUNT(*) FROM signals s JOIN projects p ON p.id = s.project_id WHERE p.org_id = $1 AND s.ingested_at > NOW() - INTERVAL '7 days')::int,
+			(SELECT COUNT(*) FROM feature_candidates fc JOIN projects p ON p.id = fc.project_id WHERE p.org_id = $1 AND fc.suggested_at > NOW() - INTERVAL '7 days')::int,
+			(SELECT COUNT(*) FROM specs sp JOIN projects p ON p.id = sp.project_id WHERE p.org_id = $1 AND sp.created_at > NOW() - INTERVAL '7 days')::int,
+			(SELECT COUNT(*) FROM generations g JOIN projects p ON p.id = g.project_id WHERE p.org_id = $1 AND g.pr_url IS NOT NULL AND g.pr_url != '' AND g.created_at > NOW() - INTERVAL '7 days')::int`
+
+	var stats OrgWeeklyStats
+	err := s.pool.QueryRow(ctx, q, orgID).Scan(
+		&stats.SignalCount, &stats.CandidateCount, &stats.SpecCount, &stats.PRCount,
+	)
+	if err != nil {
+		return OrgWeeklyStats{}, fmt.Errorf("store.GetOrgWeeklyStats: %w", err)
+	}
+	return stats, nil
+}
+
+// GetProjectWeeklyStats returns per-project signal and PR counts for the past 7 days.
+func (s *Store) GetProjectWeeklyStats(ctx context.Context, orgID uuid.UUID) ([]ProjectWeeklyStats, error) {
+	const q = `
+		SELECT p.name,
+			COALESCE(sig.cnt, 0)::int,
+			COALESCE(gen.cnt, 0)::int
+		FROM projects p
+		LEFT JOIN (
+			SELECT project_id, COUNT(*) AS cnt FROM signals
+			WHERE ingested_at > NOW() - INTERVAL '7 days'
+			GROUP BY project_id
+		) sig ON sig.project_id = p.id
+		LEFT JOIN (
+			SELECT project_id, COUNT(*) AS cnt FROM generations
+			WHERE pr_url IS NOT NULL AND pr_url != '' AND created_at > NOW() - INTERVAL '7 days'
+			GROUP BY project_id
+		) gen ON gen.project_id = p.id
+		WHERE p.org_id = $1
+		ORDER BY p.name`
+
+	rows, err := s.pool.Query(ctx, q, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("store.GetProjectWeeklyStats: %w", err)
+	}
+	defer rows.Close()
+
+	var stats []ProjectWeeklyStats
+	for rows.Next() {
+		var ps ProjectWeeklyStats
+		if err := rows.Scan(&ps.ProjectName, &ps.SignalCount, &ps.PRCount); err != nil {
+			return nil, fmt.Errorf("store.GetProjectWeeklyStats: scan: %w", err)
+		}
+		stats = append(stats, ps)
+	}
+	return stats, rows.Err()
+}
+
+// GetOrgTopCopilotInsights returns the top N non-dismissed copilot notes
+// created in the past 7 days across all projects in an org, ordered by recency.
+func (s *Store) GetOrgTopCopilotInsights(ctx context.Context, orgID uuid.UUID, limit int) ([]OrgCopilotInsight, error) {
+	const q = `
+		SELECT cn.content, cn.note_type, p.name AS project_name
+		FROM   copilot_notes cn
+		JOIN   projects p ON p.id = cn.project_id
+		WHERE  p.org_id = $1
+		  AND  cn.dismissed = FALSE
+		  AND  cn.created_at > NOW() - INTERVAL '7 days'
+		ORDER  BY cn.created_at DESC
+		LIMIT  $2`
+
+	rows, err := s.pool.Query(ctx, q, orgID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("store.GetOrgTopCopilotInsights: %w", err)
+	}
+	defer rows.Close()
+
+	var insights []OrgCopilotInsight
+	for rows.Next() {
+		var i OrgCopilotInsight
+		if err := rows.Scan(&i.Content, &i.NoteType, &i.ProjectName); err != nil {
+			return nil, fmt.Errorf("store.GetOrgTopCopilotInsights: scan: %w", err)
+		}
+		insights = append(insights, i)
+	}
+	return insights, rows.Err()
+}
+
+// OrgCopilotInsight is a copilot note with its parent project name for digest emails.
+type OrgCopilotInsight struct {
+	Content     string
+	NoteType    string
+	ProjectName string
 }
 
 // UpdatePipelineRunError updates the error field of a pipeline run.

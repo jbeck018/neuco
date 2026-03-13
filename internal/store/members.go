@@ -79,7 +79,8 @@ func (s *Store) ListOrgMembers(ctx context.Context, orgID uuid.UUID) ([]OrgMembe
 		       m.joined_at,
 		       u.github_login,
 		       u.email,
-		       u.avatar_url
+		       u.avatar_url,
+		       m.digest_opt_out
 		FROM   org_members m
 		JOIN   users u ON u.id = m.user_id
 		WHERE  m.org_id = $1
@@ -103,6 +104,7 @@ func (s *Store) ListOrgMembers(ctx context.Context, orgID uuid.UUID) ([]OrgMembe
 			&m.GitHubLogin,
 			&m.Email,
 			&m.AvatarURL,
+			&m.DigestOptOut,
 		); err != nil {
 			return nil, fmt.Errorf("store.ListOrgMembers: scan: %w", err)
 		}
@@ -135,7 +137,21 @@ type OrgMemberWithUser struct {
 	JoinedAt    *time.Time     `json:"joined_at,omitempty"`
 	GitHubLogin string         `json:"github_login"`
 	Email       string         `json:"email"`
-	AvatarURL   string         `json:"avatar_url"`
+	AvatarURL    string         `json:"avatar_url"`
+	DigestOptOut bool           `json:"digest_opt_out"`
+}
+
+// SetDigestOptOut updates the digest_opt_out preference for a member.
+func (s *Store) SetDigestOptOut(ctx context.Context, orgID, userID uuid.UUID, optOut bool) error {
+	const q = `UPDATE org_members SET digest_opt_out = $3 WHERE org_id = $1 AND user_id = $2`
+	ct, err := s.pool.Exec(ctx, q, orgID, userID, optOut)
+	if err != nil {
+		return fmt.Errorf("store.SetDigestOptOut: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return fmt.Errorf("store.SetDigestOptOut: member not found")
+	}
+	return nil
 }
 
 // scanMember reads a single OrgMember from any pgx row-like value.
