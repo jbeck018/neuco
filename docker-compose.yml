@@ -1,7 +1,8 @@
 services:
   postgres:
     image: pgvector/pgvector:pg16
-    # No host port exposed — Nango connects internally via Docker network. Main app uses Neon.
+    ports:
+      - "5432:5432"
     environment:
       POSTGRES_USER: neuco
       POSTGRES_PASSWORD: neuco
@@ -15,7 +16,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # Redis — required by Nango for caching and job queues
   redis:
     image: redis:7.2-alpine
     ports:
@@ -26,12 +26,10 @@ services:
       timeout: 5s
       retries: 5
 
-  # Nango — handles OAuth flows and API proxy for integrations
-  # Users click "Connect" → Nango handles OAuth → stores tokens → proxies API calls
   nango-server:
     image: nangohq/nango-server:hosted
     ports:
-      - "3003:8080"  # Nango listens on 8080 internally
+      - "3003:8080"
     environment:
       - NANGO_DB_HOST=postgres
       - NANGO_DB_PORT=5432
@@ -59,6 +57,40 @@ services:
     ports:
       - "1025:1025"
       - "8025:8025"
+
+  neuco-api:
+    build:
+      context: .
+      target: server
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - DATABASE_URL=postgres://neuco:neuco@postgres:5432/neuco?sslmode=disable
+      - JWT_SECRET=dev-jwt-secret-change-me
+      - INTERNAL_API_TOKEN=dev-internal-token
+      - FRONTEND_URL=http://localhost:5173
+      - NANGO_SERVER_URL=http://nango-server:8080
+      - APP_ENV=development
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  neuco-worker:
+    build:
+      context: .
+      target: worker
+    environment:
+      - DATABASE_URL=postgres://neuco:neuco@postgres:5432/neuco?sslmode=disable
+      - JWT_SECRET=dev-jwt-secret-change-me
+      - INTERNAL_API_TOKEN=dev-internal-token
+      - NANGO_SERVER_URL=http://nango-server:8080
+      - APP_ENV=development
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   pgdata:

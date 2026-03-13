@@ -7,3 +7,7 @@ docker/
 docker-compose.yml
 fly.*.toml
 .claude/
+agents/
+scripts/
+*_test.go
+Makefile
