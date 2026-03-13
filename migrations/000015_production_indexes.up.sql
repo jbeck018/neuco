@@ -78,5 +78,6 @@ CREATE INDEX IF NOT EXISTS idx_generations_project
 -- ---------------------------------------------------------------------------
 -- 13. Statement timeout safety net (30s default for all connections)
 -- Prevents runaway queries from holding connections indefinitely.
+-- Note: Set via connection pool config (e.g. Neon dashboard) rather than
+-- ALTER DATABASE, which requires knowing the exact database name.
 -- ---------------------------------------------------------------------------
-ALTER DATABASE CURRENT SET statement_timeout = '30s';

@@ -3,7 +3,7 @@
 -- Description: Remove production indexes and statement_timeout.
 -- =============================================================================
 
-ALTER DATABASE CURRENT RESET statement_timeout;
+-- statement_timeout managed via connection pool config, not migration
 
 DROP INDEX IF EXISTS idx_generations_project;
 DROP INDEX IF EXISTS idx_copilot_notes_active;
