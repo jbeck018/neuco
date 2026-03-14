@@ -20,6 +20,18 @@ func (e *errResponse) Render(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+// validationErrResponse is the canonical JSON validation error body.
+type validationErrResponse struct {
+	HTTPStatusCode int               `json:"-"`
+	Error          string            `json:"error"`
+	Fields         map[string]string `json:"fields"`
+}
+
+func (e *validationErrResponse) Render(w http.ResponseWriter, r *http.Request) error {
+	render.Status(r, e.HTTPStatusCode)
+	return nil
+}
+
 func respondErr(w http.ResponseWriter, r *http.Request, status int, msg string) {
 	if status >= 500 {
 		slog.ErrorContext(r.Context(), "server error",
@@ -33,6 +45,17 @@ func respondErr(w http.ResponseWriter, r *http.Request, status int, msg string) 
 		}
 	}
 	render.Render(w, r, &errResponse{HTTPStatusCode: status, Error: msg}) //nolint:errcheck
+}
+
+func respondValidation(w http.ResponseWriter, r *http.Request, err *ValidationError) {
+	if err == nil {
+		err = &ValidationError{}
+	}
+	render.Render(w, r, &validationErrResponse{ //nolint:errcheck
+		HTTPStatusCode: http.StatusUnprocessableEntity,
+		Error:          "validation failed",
+		Fields:         err.Fields,
+	})
 }
 
 func respondOK(w http.ResponseWriter, r *http.Request, payload any) {

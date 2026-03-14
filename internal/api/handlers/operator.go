@@ -4,29 +4,32 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"runtime"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
+var processStartTime = time.Now()
+
 // orgWithStats bundles an org with member count and usage for the operator view.
 type orgWithStats struct {
-	ID          uuid.UUID `json:"id"`
-	Name        string    `json:"name"`
-	Slug        string    `json:"slug"`
-	Plan        string    `json:"plan"`
-	MemberCount int       `json:"member_count"`
-	ProjectCount int      `json:"project_count"`
-	SignalCount int       `json:"signal_count"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID           uuid.UUID `json:"id"`
+	Name         string    `json:"name"`
+	Slug         string    `json:"slug"`
+	Plan         string    `json:"plan"`
+	MemberCount  int       `json:"member_count"`
+	ProjectCount int       `json:"project_count"`
+	SignalCount  int       `json:"signal_count"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 // healthResponse is the system health payload.
 type healthResponse struct {
-	Status   string            `json:"status"`
-	Checks   map[string]string `json:"checks"`
-	Timestamp time.Time        `json:"timestamp"`
+	Status    string            `json:"status"`
+	Checks    map[string]string `json:"checks"`
+	Timestamp time.Time         `json:"timestamp"`
 }
 
 // OperatorListOrgs handles GET /operator/orgs.
@@ -144,6 +147,26 @@ func OperatorHealth(d *Deps) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(statusCode)
 		respondOK(w, r, resp)
+	}
+}
+
+// OperatorMetrics handles GET /operator/metrics.
+// Returns basic runtime and process metrics for operators.
+func OperatorMetrics() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var m runtime.MemStats
+		runtime.ReadMemStats(&m)
+
+		respondOK(w, r, map[string]any{
+			"runtime": map[string]any{
+				"goroutines": runtime.NumGoroutine(),
+				"heap_alloc": m.HeapAlloc,
+				"sys_memory": m.Sys,
+			},
+			"process": map[string]any{
+				"uptime_seconds": int64(time.Since(processStartTime).Seconds()),
+			},
+		})
 	}
 }
 

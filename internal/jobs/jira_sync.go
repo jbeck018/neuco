@@ -19,12 +19,13 @@ import (
 // the integration's Config map.
 type JiraSyncWorker struct {
 	river.WorkerDefaults[JiraSyncJobArgs]
-	store *store.Store
-	cfg   *config.Config
+	store  *store.Store
+	cfg    *config.Config
+	jobCtx *JobContext
 }
 
-func NewJiraSyncWorker(s *store.Store, cfg *config.Config) *JiraSyncWorker {
-	return &JiraSyncWorker{store: s, cfg: cfg}
+func NewJiraSyncWorker(s *store.Store, cfg *config.Config, jobCtx *JobContext) *JiraSyncWorker {
+	return &JiraSyncWorker{store: s, cfg: cfg, jobCtx: jobCtx}
 }
 
 func (w *JiraSyncWorker) Work(ctx context.Context, job *river.Job[JiraSyncJobArgs]) error {
@@ -120,7 +121,7 @@ func (w *JiraSyncWorker) Work(ctx context.Context, job *river.Job[JiraSyncJobArg
 }
 
 func (w *JiraSyncWorker) enqueueEmbed(ctx context.Context, args JiraSyncJobArgs) {
-	client := getRiverClient()
+	client := w.jobCtx.Client()
 	if client == nil {
 		slog.Warn("jira_sync: river client not available, skipping embed enqueue")
 		return

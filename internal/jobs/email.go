@@ -19,12 +19,14 @@ type SendEmailWorker struct {
 	river.WorkerDefaults[SendEmailJobArgs]
 	store  *store.Store
 	mailer *email.Client
+	jobCtx *JobContext
 }
 
-func NewSendEmailWorker(s *store.Store, cfg *config.Config) *SendEmailWorker {
+func NewSendEmailWorker(s *store.Store, cfg *config.Config, jobCtx *JobContext) *SendEmailWorker {
 	return &SendEmailWorker{
 		store:  s,
 		mailer: email.New(cfg.ResendAPIKey, cfg.FrontendURL),
+		jobCtx: jobCtx,
 	}
 }
 
@@ -112,10 +114,14 @@ func (w *SendEmailWorker) sendWeeklyDigest(ctx context.Context, raw json.RawMess
 }
 
 // EnqueueEmail is a helper to enqueue a transactional email job.
-func EnqueueEmail(ctx context.Context, emailType string, payload any) error {
-	client := getRiverClient()
+func EnqueueEmail(ctx context.Context, jobCtx *JobContext, emailType string, payload any) error {
+	if jobCtx == nil {
+		return nil
+	}
+
+	client := jobCtx.Client()
 	if client == nil {
-		return nil // emails disabled in insert-only mode
+		return nil // emails disabled when worker client is not initialized
 	}
 
 	raw, err := json.Marshal(payload)

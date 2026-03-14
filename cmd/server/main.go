@@ -31,7 +31,18 @@ func main() {
 	flushSentry := observability.InitSentry(cfg, "neuco-api")
 	defer flushSentry()
 
-	pool, err := pgxpool.New(context.Background(), cfg.DatabaseURL)
+	poolConfig, err := pgxpool.ParseConfig(cfg.DatabaseURL)
+	if err != nil {
+		slog.Error("failed to connect to database", "error", err)
+		os.Exit(1)
+	}
+	poolConfig.MaxConns = 25
+	poolConfig.MinConns = 5
+	poolConfig.MaxConnLifetime = time.Hour
+	poolConfig.MaxConnIdleTime = 30 * time.Minute
+	poolConfig.HealthCheckPeriod = 30 * time.Second
+
+	pool, err := pgxpool.NewWithConfig(context.Background(), poolConfig)
 	if err != nil {
 		slog.Error("failed to connect to database", "error", err)
 		os.Exit(1)
@@ -49,7 +60,7 @@ func main() {
 	// River client in insert-only mode — workers must still be registered
 	// so that River recognises the job kinds during Insert.
 	workers := river.NewWorkers()
-	jobs.RegisterAllWorkers(workers, s, cfg)
+	jobCtx := jobs.RegisterAllWorkers(workers, s, cfg)
 	riverClient, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
 		Workers: workers,
 	})
@@ -58,10 +69,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	deps := api.NewDeps(s, riverClient, cfg, pool)
+	jobCtx.SetClient(riverClient)
+
+	deps := api.NewDeps(s, riverClient, jobCtx, cfg, pool)
 	// NewRouter constructs the full Chi router with all middleware and routes.
 	handler := api.NewRouter(deps, slog.Default())
-
 	srv := &http.Server{
 		Addr:         ":" + cfg.Port,
 		Handler:      handler,

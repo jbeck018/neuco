@@ -20,11 +20,12 @@ import (
 // FetchSpecWorker loads the spec and project context for code generation.
 type FetchSpecWorker struct {
 	river.WorkerDefaults[FetchSpecJobArgs]
-	store *store.Store
+	store  *store.Store
+	jobCtx *JobContext
 }
 
-func NewFetchSpecWorker(s *store.Store) *FetchSpecWorker {
-	return &FetchSpecWorker{store: s}
+func NewFetchSpecWorker(s *store.Store, jobCtx *JobContext) *FetchSpecWorker {
+	return &FetchSpecWorker{store: s, jobCtx: jobCtx}
 }
 
 func (w *FetchSpecWorker) Work(ctx context.Context, job *river.Job[FetchSpecJobArgs]) error {
@@ -45,7 +46,7 @@ func (w *FetchSpecWorker) Work(ctx context.Context, job *river.Job[FetchSpecJobA
 	CompleteTask(ctx, w.store, job.Args.TaskID, start)
 
 	// Chain: index_repo
-	client := getRiverClient()
+	client := w.jobCtx.Client()
 	if client != nil {
 		run, _ := w.store.GetPipelineRun(ctx, job.Args.RunID)
 		var indexTaskID uuid.UUID
@@ -75,12 +76,13 @@ func (w *FetchSpecWorker) Work(ctx context.Context, job *river.Job[FetchSpecJobA
 // IndexRepoWorker indexes the user's GitHub repository.
 type IndexRepoWorker struct {
 	river.WorkerDefaults[IndexRepoJobArgs]
-	store *store.Store
-	cfg   *config.Config
+	store  *store.Store
+	cfg    *config.Config
+	jobCtx *JobContext
 }
 
-func NewIndexRepoWorker(s *store.Store, cfg *config.Config) *IndexRepoWorker {
-	return &IndexRepoWorker{store: s, cfg: cfg}
+func NewIndexRepoWorker(s *store.Store, cfg *config.Config, jobCtx *JobContext) *IndexRepoWorker {
+	return &IndexRepoWorker{store: s, cfg: cfg, jobCtx: jobCtx}
 }
 
 func (w *IndexRepoWorker) Work(ctx context.Context, job *river.Job[IndexRepoJobArgs]) error {
@@ -99,7 +101,7 @@ func (w *IndexRepoWorker) Work(ctx context.Context, job *river.Job[IndexRepoJobA
 	if project.GitHubRepo == "" {
 		slog.Warn("no github repo configured, skipping index")
 		CompleteTask(ctx, w.store, job.Args.TaskID, start)
-		chainBuildContext(ctx, w.store, job.Args)
+		chainBuildContext(ctx, w.store, w.jobCtx, job.Args)
 		return nil
 	}
 
@@ -109,7 +111,7 @@ func (w *IndexRepoWorker) Work(ctx context.Context, job *river.Job[IndexRepoJobA
 			"repo", project.GitHubRepo,
 		)
 		CompleteTask(ctx, w.store, job.Args.TaskID, start)
-		chainBuildContext(ctx, w.store, job.Args)
+		chainBuildContext(ctx, w.store, w.jobCtx, job.Args)
 		return nil
 	}
 
@@ -122,7 +124,7 @@ func (w *IndexRepoWorker) Work(ctx context.Context, job *river.Job[IndexRepoJobA
 			"error", err,
 		)
 		CompleteTask(ctx, w.store, job.Args.TaskID, start)
-		chainBuildContext(ctx, w.store, job.Args)
+		chainBuildContext(ctx, w.store, w.jobCtx, job.Args)
 		return nil
 	}
 
@@ -133,7 +135,7 @@ func (w *IndexRepoWorker) Work(ctx context.Context, job *river.Job[IndexRepoJobA
 			"error", err,
 		)
 		CompleteTask(ctx, w.store, job.Args.TaskID, start)
-		chainBuildContext(ctx, w.store, job.Args)
+		chainBuildContext(ctx, w.store, w.jobCtx, job.Args)
 		return nil
 	}
 
@@ -145,7 +147,7 @@ func (w *IndexRepoWorker) Work(ctx context.Context, job *river.Job[IndexRepoJobA
 		)
 		// Non-fatal: proceed without index.
 		CompleteTask(ctx, w.store, job.Args.TaskID, start)
-		chainBuildContext(ctx, w.store, job.Args)
+		chainBuildContext(ctx, w.store, w.jobCtx, job.Args)
 		return nil
 	}
 
@@ -159,7 +161,7 @@ func (w *IndexRepoWorker) Work(ctx context.Context, job *river.Job[IndexRepoJobA
 		)
 		// Non-fatal: code generation can proceed without the index.
 		CompleteTask(ctx, w.store, job.Args.TaskID, start)
-		chainBuildContext(ctx, w.store, job.Args)
+		chainBuildContext(ctx, w.store, w.jobCtx, job.Args)
 		return nil
 	}
 
@@ -191,7 +193,7 @@ func (w *IndexRepoWorker) Work(ctx context.Context, job *river.Job[IndexRepoJobA
 	)
 
 	CompleteTask(ctx, w.store, job.Args.TaskID, start)
-	chainBuildContextWithIndex(ctx, w.store, job.Args, repoIndex)
+	chainBuildContextWithIndex(ctx, w.store, w.jobCtx, job.Args, repoIndex)
 	return nil
 }
 
@@ -222,12 +224,12 @@ func splitOwnerRepo(s string) []string {
 	return result
 }
 
-func chainBuildContext(ctx context.Context, s *store.Store, args IndexRepoJobArgs) {
-	chainBuildContextWithIndex(ctx, s, args, nil)
+func chainBuildContext(ctx context.Context, s *store.Store, jobCtx *JobContext, args IndexRepoJobArgs) {
+	chainBuildContextWithIndex(ctx, s, jobCtx, args, nil)
 }
 
-func chainBuildContextWithIndex(ctx context.Context, s *store.Store, args IndexRepoJobArgs, index *generation.RepoIndex) {
-	client := getRiverClient()
+func chainBuildContextWithIndex(ctx context.Context, s *store.Store, jobCtx *JobContext, args IndexRepoJobArgs, index *generation.RepoIndex) {
+	client := jobCtx.Client()
 	if client == nil {
 		return
 	}
@@ -264,11 +266,12 @@ func chainBuildContextWithIndex(ctx context.Context, s *store.Store, args IndexR
 // BuildContextWorker selects relevant codebase context for generation.
 type BuildContextWorker struct {
 	river.WorkerDefaults[BuildContextJobArgs]
-	store *store.Store
+	store  *store.Store
+	jobCtx *JobContext
 }
 
-func NewBuildContextWorker(s *store.Store) *BuildContextWorker {
-	return &BuildContextWorker{store: s}
+func NewBuildContextWorker(s *store.Store, jobCtx *JobContext) *BuildContextWorker {
+	return &BuildContextWorker{store: s, jobCtx: jobCtx}
 }
 
 func (w *BuildContextWorker) Work(ctx context.Context, job *river.Job[BuildContextJobArgs]) error {
@@ -313,7 +316,7 @@ func (w *BuildContextWorker) Work(ctx context.Context, job *river.Job[BuildConte
 
 	// Chain: generate_code, forwarding the context string so the worker can
 	// embed it in the prompt without re-querying the index.
-	client := getRiverClient()
+	client := w.jobCtx.Client()
 	if client != nil {
 		run, _ := w.store.GetPipelineRun(ctx, job.Args.RunID)
 		var genTaskID uuid.UUID
@@ -344,12 +347,13 @@ func (w *BuildContextWorker) Work(ctx context.Context, job *river.Job[BuildConte
 // GenerateCodeWorker uses an LLM to generate component code from the spec.
 type GenerateCodeWorker struct {
 	river.WorkerDefaults[GenerateCodeJobArgs]
-	store *store.Store
-	cfg   *config.Config
+	store  *store.Store
+	cfg    *config.Config
+	jobCtx *JobContext
 }
 
-func NewGenerateCodeWorker(s *store.Store, cfg *config.Config) *GenerateCodeWorker {
-	return &GenerateCodeWorker{store: s, cfg: cfg}
+func NewGenerateCodeWorker(s *store.Store, cfg *config.Config, jobCtx *JobContext) *GenerateCodeWorker {
+	return &GenerateCodeWorker{store: s, cfg: cfg, jobCtx: jobCtx}
 }
 
 func (w *GenerateCodeWorker) Work(ctx context.Context, job *river.Job[GenerateCodeJobArgs]) error {
@@ -413,7 +417,7 @@ func (w *GenerateCodeWorker) Work(ctx context.Context, job *river.Job[GenerateCo
 	CompleteTask(ctx, w.store, job.Args.TaskID, start)
 
 	// Chain: create_pr
-	client := getRiverClient()
+	client := w.jobCtx.Client()
 	if client != nil {
 		run, _ := w.store.GetPipelineRun(ctx, job.Args.RunID)
 		var prTaskID uuid.UUID
@@ -591,12 +595,13 @@ func sanitizeFileName(s string) string {
 // CreatePRWorker creates a GitHub PR with the generated files.
 type CreatePRWorker struct {
 	river.WorkerDefaults[CreatePRJobArgs]
-	store *store.Store
-	cfg   *config.Config
+	store  *store.Store
+	cfg    *config.Config
+	jobCtx *JobContext
 }
 
-func NewCreatePRWorker(s *store.Store, cfg *config.Config) *CreatePRWorker {
-	return &CreatePRWorker{store: s, cfg: cfg}
+func NewCreatePRWorker(s *store.Store, cfg *config.Config, jobCtx *JobContext) *CreatePRWorker {
+	return &CreatePRWorker{store: s, cfg: cfg, jobCtx: jobCtx}
 }
 
 func (w *CreatePRWorker) Work(ctx context.Context, job *river.Job[CreatePRJobArgs]) error {
@@ -639,7 +644,7 @@ func (w *CreatePRWorker) Work(ctx context.Context, job *river.Job[CreatePRJobArg
 			slog.Error("failed to update generation", "error", err)
 		}
 		CompleteTask(ctx, w.store, job.Args.TaskID, start)
-		chainNotify(ctx, w.store, job.Args)
+		chainNotify(ctx, w.store, w.jobCtx, job.Args)
 		return nil
 	}
 
@@ -657,7 +662,7 @@ func (w *CreatePRWorker) Work(ctx context.Context, job *river.Job[CreatePRJobArg
 			slog.Error("failed to update generation", "error", updateErr)
 		}
 		CompleteTask(ctx, w.store, job.Args.TaskID, start)
-		chainNotify(ctx, w.store, job.Args)
+		chainNotify(ctx, w.store, w.jobCtx, job.Args)
 		return nil
 	}
 
@@ -754,7 +759,7 @@ func (w *CreatePRWorker) Work(ctx context.Context, job *river.Job[CreatePRJobArg
 	}
 
 	CompleteTask(ctx, w.store, job.Args.TaskID, start)
-	chainNotify(ctx, w.store, job.Args)
+	chainNotify(ctx, w.store, w.jobCtx, job.Args)
 	return nil
 }
 
@@ -795,8 +800,8 @@ func buildPRBody(gen *domain.Generation, spec *domain.Spec) string {
 	return sb.String()
 }
 
-func chainNotify(ctx context.Context, s *store.Store, args CreatePRJobArgs) {
-	client := getRiverClient()
+func chainNotify(ctx context.Context, s *store.Store, jobCtx *JobContext, args CreatePRJobArgs) {
+	client := jobCtx.Client()
 	if client == nil {
 		return
 	}
@@ -826,12 +831,13 @@ func chainNotify(ctx context.Context, s *store.Store, args CreatePRJobArgs) {
 // NotifyWorker sends notifications on generation completion.
 type NotifyWorker struct {
 	river.WorkerDefaults[NotifyJobArgs]
-	store *store.Store
-	cfg   *config.Config
+	store  *store.Store
+	cfg    *config.Config
+	jobCtx *JobContext
 }
 
-func NewNotifyWorker(s *store.Store, cfg *config.Config) *NotifyWorker {
-	return &NotifyWorker{store: s, cfg: cfg}
+func NewNotifyWorker(s *store.Store, cfg *config.Config, jobCtx *JobContext) *NotifyWorker {
+	return &NotifyWorker{store: s, cfg: cfg, jobCtx: jobCtx}
 }
 
 func (w *NotifyWorker) Work(ctx context.Context, job *river.Job[NotifyJobArgs]) error {
@@ -862,7 +868,7 @@ func (w *NotifyWorker) Work(ctx context.Context, job *river.Job[NotifyJobArgs]) 
 	CheckPipelineCompletion(ctx, w.store, job.Args.RunID)
 
 	// Trigger copilot review on the generation
-	client := getRiverClient()
+	client := w.jobCtx.Client()
 	if client != nil {
 		_, err := client.Insert(ctx, CopilotReviewJobArgs{
 			ProjectID:  job.Args.ProjectID,
@@ -897,7 +903,7 @@ func (w *NotifyWorker) enqueuePRNotification(ctx context.Context, gen *domain.Ge
 		prNumber = *gen.PRNumber
 	}
 
-	return EnqueueEmail(ctx, "pr_created", map[string]interface{}{
+	return EnqueueEmail(ctx, w.jobCtx, "pr_created", map[string]interface{}{
 		"email":        user.Email,
 		"project_name": project.Name,
 		"pr_url":       gen.PRURL,

@@ -19,12 +19,13 @@ import (
 // Config["access_token"] field.
 type LinearSyncWorker struct {
 	river.WorkerDefaults[LinearSyncJobArgs]
-	store *store.Store
-	cfg   *config.Config
+	store  *store.Store
+	cfg    *config.Config
+	jobCtx *JobContext
 }
 
-func NewLinearSyncWorker(s *store.Store, cfg *config.Config) *LinearSyncWorker {
-	return &LinearSyncWorker{store: s, cfg: cfg}
+func NewLinearSyncWorker(s *store.Store, cfg *config.Config, jobCtx *JobContext) *LinearSyncWorker {
+	return &LinearSyncWorker{store: s, cfg: cfg, jobCtx: jobCtx}
 }
 
 func (w *LinearSyncWorker) Work(ctx context.Context, job *river.Job[LinearSyncJobArgs]) error {
@@ -112,7 +113,7 @@ func (w *LinearSyncWorker) Work(ctx context.Context, job *river.Job[LinearSyncJo
 }
 
 func (w *LinearSyncWorker) enqueueEmbed(ctx context.Context, args LinearSyncJobArgs) {
-	client := getRiverClient()
+	client := w.jobCtx.Client()
 	if client == nil {
 		slog.Warn("linear_sync: river client not available, skipping embed enqueue")
 		return

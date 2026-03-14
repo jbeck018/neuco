@@ -21,14 +21,14 @@ import (
 // persists the resulting insights with embeddings for future similarity search.
 type UpdateContextWorker struct {
 	river.WorkerDefaults[UpdateContextJobArgs]
-	store *store.Store
-	cfg   *config.Config
+	store  *store.Store
+	cfg    *config.Config
+	jobCtx *JobContext
 }
 
-func NewUpdateContextWorker(s *store.Store, cfg *config.Config) *UpdateContextWorker {
-	return &UpdateContextWorker{store: s, cfg: cfg}
+func NewUpdateContextWorker(s *store.Store, cfg *config.Config, jobCtx *JobContext) *UpdateContextWorker {
+	return &UpdateContextWorker{store: s, cfg: cfg, jobCtx: jobCtx}
 }
-
 func (w *UpdateContextWorker) Work(ctx context.Context, job *river.Job[UpdateContextJobArgs]) error {
 	start := time.Now()
 	StartTask(ctx, w.store, job.Args.TaskID)
@@ -137,7 +137,7 @@ func (w *UpdateContextWorker) Work(ctx context.Context, job *river.Job[UpdateCon
 }
 
 func (w *UpdateContextWorker) triggerCopilotReview(ctx context.Context, projectID, runID uuid.UUID) {
-	client := getRiverClient()
+	client := w.jobCtx.Client()
 	if client != nil {
 		_, err := client.Insert(ctx, CopilotReviewJobArgs{
 			ProjectID:  projectID,

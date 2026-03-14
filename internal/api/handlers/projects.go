@@ -46,20 +46,28 @@ func CreateProject(d *Deps) http.HandlerFunc {
 		orgID := mw.ResolvedOrgIDFromCtx(r.Context())
 
 		var req createProjectRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Name) == "" {
-			respondErr(w, r, http.StatusBadRequest, "name is required")
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondErr(w, r, http.StatusBadRequest, "invalid request body")
 			return
 		}
-		if msg := validateStringLen("name", req.Name, MaxNameLen); msg != "" {
-			respondErr(w, r, http.StatusBadRequest, msg)
-			return
+
+		name := strings.TrimSpace(req.Name)
+
+		validationErr := &ValidationError{}
+		if msg := ValidateRequired("name", name); msg != "" {
+			validationErr.Add("name", msg)
+		}
+		if msg := ValidateMaxLength("name", name, MaxNameLen); msg != "" {
+			validationErr.Add("name", msg)
 		}
 		if !isValidFramework(req.Framework) {
-			respondErr(w, r, http.StatusBadRequest, "invalid framework")
-			return
+			validationErr.Add("framework", "invalid framework")
 		}
 		if !isValidStyling(req.Styling) {
-			respondErr(w, r, http.StatusBadRequest, "invalid styling")
+			validationErr.Add("styling", "invalid styling")
+		}
+		if validationErr.HasErrors() {
+			respondValidation(w, r, validationErr)
 			return
 		}
 
@@ -67,7 +75,7 @@ func CreateProject(d *Deps) http.HandlerFunc {
 
 		project, err := d.Store.CreateProject(r.Context(),
 			orgID,
-			strings.TrimSpace(req.Name),
+			name,
 			req.GitHubRepo,
 			req.Framework,
 			req.Styling,
@@ -113,20 +121,22 @@ func UpdateProject(d *Deps) http.HandlerFunc {
 		}
 
 		var name *string
+		validationErr := &ValidationError{}
 		if req.Name != nil {
 			trimmed := strings.TrimSpace(*req.Name)
-			if msg := validateStringLen("name", trimmed, MaxNameLen); msg != "" {
-				respondErr(w, r, http.StatusBadRequest, msg)
-				return
+			if msg := ValidateMaxLength("name", trimmed, MaxNameLen); msg != "" {
+				validationErr.Add("name", msg)
 			}
 			name = &trimmed
 		}
 		if req.Framework != nil && !isValidFramework(*req.Framework) {
-			respondErr(w, r, http.StatusBadRequest, "invalid framework")
-			return
+			validationErr.Add("framework", "invalid framework")
 		}
 		if req.Styling != nil && !isValidStyling(*req.Styling) {
-			respondErr(w, r, http.StatusBadRequest, "invalid styling")
+			validationErr.Add("styling", "invalid styling")
+		}
+		if validationErr.HasErrors() {
+			respondValidation(w, r, validationErr)
 			return
 		}
 

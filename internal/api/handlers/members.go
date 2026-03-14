@@ -94,7 +94,7 @@ func InviteMember(d *Deps) http.HandlerFunc {
 				if err == nil {
 					orgName = org.Name
 				}
-				if err := jobs.EnqueueEmail(r.Context(), "invite", map[string]string{
+				if err := jobs.EnqueueEmail(r.Context(), d.JobCtx, "invite", map[string]string{
 					"email":        target.Email,
 					"inviter_name": inviterName,
 					"org_name":     orgName,

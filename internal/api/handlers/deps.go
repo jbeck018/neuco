@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/neuco-ai/neuco/internal/ai"
 	"github.com/neuco-ai/neuco/internal/config"
+	"github.com/neuco-ai/neuco/internal/jobs"
 	"github.com/neuco-ai/neuco/internal/store"
 	"github.com/riverqueue/river"
 )
@@ -15,6 +16,7 @@ import (
 type Deps struct {
 	Store       *store.Store
 	River       *river.Client[pgx.Tx]
+	JobCtx      *jobs.JobContext
 	Config      *config.Config
 	DB          *pgxpool.Pool
 	QueryEngine *ai.SignalQueryEngine

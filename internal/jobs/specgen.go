@@ -18,14 +18,14 @@ import (
 // SpecGenWorker generates a structured spec from a feature candidate.
 type SpecGenWorker struct {
 	river.WorkerDefaults[SpecGenJobArgs]
-	store *store.Store
-	cfg   *config.Config
+	store  *store.Store
+	cfg    *config.Config
+	jobCtx *JobContext
 }
 
-func NewSpecGenWorker(s *store.Store, cfg *config.Config) *SpecGenWorker {
-	return &SpecGenWorker{store: s, cfg: cfg}
+func NewSpecGenWorker(s *store.Store, cfg *config.Config, jobCtx *JobContext) *SpecGenWorker {
+	return &SpecGenWorker{store: s, cfg: cfg, jobCtx: jobCtx}
 }
-
 func (w *SpecGenWorker) Work(ctx context.Context, job *river.Job[SpecGenJobArgs]) error {
 	start := time.Now()
 	StartTask(ctx, w.store, job.Args.TaskID)
@@ -101,7 +101,7 @@ func (w *SpecGenWorker) Work(ctx context.Context, job *river.Job[SpecGenJobArgs]
 	CheckPipelineCompletion(ctx, w.store, job.Args.RunID)
 
 	// Trigger copilot spec review
-	client := getRiverClient()
+	client := w.jobCtx.Client()
 	if client != nil {
 		_, err := client.Insert(ctx, CopilotReviewJobArgs{
 			ProjectID:  job.Args.ProjectID,

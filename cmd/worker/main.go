@@ -29,7 +29,18 @@ func main() {
 	flushSentry := observability.InitSentry(cfg, "neuco-worker")
 	defer flushSentry()
 
-	pool, err := pgxpool.New(context.Background(), cfg.DatabaseURL)
+	poolConfig, err := pgxpool.ParseConfig(cfg.DatabaseURL)
+	if err != nil {
+		slog.Error("failed to connect to database", "error", err)
+		os.Exit(1)
+	}
+	poolConfig.MaxConns = 15
+	poolConfig.MinConns = 2
+	poolConfig.MaxConnLifetime = time.Hour
+	poolConfig.MaxConnIdleTime = 30 * time.Minute
+	poolConfig.HealthCheckPeriod = 30 * time.Second
+
+	pool, err := pgxpool.NewWithConfig(context.Background(), poolConfig)
 	if err != nil {
 		slog.Error("failed to connect to database", "error", err)
 		os.Exit(1)
@@ -45,8 +56,7 @@ func main() {
 	s := store.New(pool)
 
 	workers := river.NewWorkers()
-	jobs.RegisterAllWorkers(workers, s, cfg)
-
+	jobCtx := jobs.RegisterAllWorkers(workers, s, cfg)
 	riverClient, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
 		Queues: map[string]river.QueueConfig{
 			"ingest":    {MaxWorkers: 5},
@@ -85,8 +95,7 @@ func main() {
 	}
 
 	// Store the river client reference so workers can chain jobs
-	jobs.SetRiverClient(riverClient)
-
+	jobCtx.SetClient(riverClient)
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 

@@ -42,8 +42,8 @@ const (
 
 // meResponse is the response body for GET /api/v1/auth/me.
 type meResponse struct {
-	User domain.User            `json:"user"`
-	Orgs []domain.Organization  `json:"orgs"`
+	User domain.User           `json:"user"`
+	Orgs []domain.Organization `json:"orgs"`
 }
 
 func githubOAuthConfig(d *Deps) *oauth2.Config {
@@ -218,7 +218,7 @@ func GitHubCallback(d *Deps) http.HandlerFunc {
 
 			// Enqueue welcome email (non-blocking — failure doesn't break signup).
 			if user.Email != "" {
-				if err := jobs.EnqueueEmail(r.Context(), "welcome", map[string]string{
+				if err := jobs.EnqueueEmail(r.Context(), d.JobCtx, "welcome", map[string]string{
 					"email":     user.Email,
 					"user_name": user.GitHubLogin,
 				}); err != nil {
@@ -248,11 +248,11 @@ func GitHubCallback(d *Deps) http.HandlerFunc {
 
 // googleUser is the response from the Google userinfo API endpoint.
 type googleUser struct {
-	Sub       string `json:"sub"` // Google's unique user ID
-	Email     string `json:"email"`
-	Name      string `json:"name"`
-	Picture   string `json:"picture"`
-	Verified  bool   `json:"email_verified"`
+	Sub      string `json:"sub"` // Google's unique user ID
+	Email    string `json:"email"`
+	Name     string `json:"name"`
+	Picture  string `json:"picture"`
+	Verified bool   `json:"email_verified"`
 }
 
 func googleOAuthConfig(d *Deps) *oauth2.Config {
@@ -377,7 +377,7 @@ func GoogleCallback(d *Deps) http.HandlerFunc {
 
 			// Enqueue welcome email.
 			if user.Email != "" {
-				if err := jobs.EnqueueEmail(r.Context(), "welcome", map[string]string{
+				if err := jobs.EnqueueEmail(r.Context(), d.JobCtx, "welcome", map[string]string{
 					"email":     user.Email,
 					"user_name": displayName,
 				}); err != nil {

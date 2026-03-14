@@ -34,9 +34,9 @@ import (
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
 const (
-	testJWTSecret      = "test-jwt-secret-that-is-at-least-32-chars-long"
-	testInternalToken  = "test-operator-token-abc123"
-	testFrontendURL    = "http://localhost:5173"
+	testJWTSecret     = "test-jwt-secret-that-is-at-least-32-chars-long"
+	testInternalToken = "test-operator-token-abc123"
+	testFrontendURL   = "http://localhost:5173"
 )
 
 // ─── Test Setup ────────────────────────────────────────────────────────────────
@@ -74,11 +74,11 @@ func testSetup(t *testing.T) *testEnv {
 	runMigrations(t, pool)
 
 	cfg := &config.Config{
-		Port:                     "0",
-		DatabaseURL:              dbURL,
-		JWTSecret:                testJWTSecret,
-		InternalAPIToken:         testInternalToken,
-		FrontendURL:              testFrontendURL,
+		Port:             "0",
+		DatabaseURL:      dbURL,
+		JWTSecret:        testJWTSecret,
+		InternalAPIToken: testInternalToken,
+		FrontendURL:      testFrontendURL,
 	}
 
 	s := store.New(pool)
@@ -86,7 +86,7 @@ func testSetup(t *testing.T) *testEnv {
 	// River client in insert-only mode — workers must be registered so
 	// that River recognises the job kinds during Insert.
 	workers := river.NewWorkers()
-	jobs.RegisterAllWorkers(workers, s, cfg)
+	jobCtx := jobs.RegisterAllWorkers(workers, s, cfg)
 	riverClient, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
 		Workers: workers,
 	})
@@ -94,11 +94,11 @@ func testSetup(t *testing.T) *testEnv {
 		pool.Close()
 		t.Fatalf("failed to create river client: %v", err)
 	}
+	jobCtx.SetClient(riverClient)
 
-	deps := api.NewDeps(s, riverClient, cfg, pool)
+	deps := api.NewDeps(s, riverClient, jobCtx, cfg, pool)
 	handler := api.NewRouter(deps, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	server := httptest.NewServer(handler)
-
 	return &testEnv{
 		server: server,
 		store:  s,
@@ -345,12 +345,12 @@ func generateTestJWT(userID, orgID uuid.UUID, role domain.OrgRole) string {
 // ─── Seed Helpers ──────────────────────────────────────────────────────────────
 
 type seedData struct {
-	userA   domain.User
-	userB   domain.User
-	orgA    domain.Organization
-	orgB    domain.Organization
-	tokenA  string // JWT for userA in orgA (owner)
-	tokenB  string // JWT for userB in orgB (owner)
+	userA  domain.User
+	userB  domain.User
+	orgA   domain.Organization
+	orgB   domain.Organization
+	tokenA string // JWT for userA in orgA (owner)
+	tokenB string // JWT for userB in orgB (owner)
 }
 
 // seedTestData inserts two users, two orgs, and membership rows. Returns
@@ -1933,7 +1933,7 @@ func TestWebhookFullFlow(t *testing.T) {
 
 		var signalPage struct {
 			Signals []domain.Signal `json:"signals"`
-			Total   int            `json:"total"`
+			Total   int             `json:"total"`
 		}
 		mustUnmarshal(t, readBody(t, resp), &signalPage)
 		if signalPage.Total == 0 {

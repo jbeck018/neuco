@@ -34,13 +34,14 @@ func RequestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 
 			userID := UserIDFromCtx(r.Context())
 			orgID := OrgIDFromCtx(r.Context())
+			duration := time.Since(start)
 
 			logger.InfoContext(r.Context(), "http request",
 				slog.String("request_id", reqID),
 				slog.String("method", r.Method),
 				slog.String("path", r.URL.Path),
 				slog.Int("status", rec.statusCode),
-				slog.Duration("duration", time.Since(start)),
+				slog.Int64("duration_ms", duration.Milliseconds()),
 				slog.String("user_id", userID.String()),
 				slog.String("org_id", orgID.String()),
 				slog.String("remote_addr", r.RemoteAddr),

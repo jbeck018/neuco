@@ -19,12 +19,13 @@ import (
 // integration's Config["access_token"] field.
 type SlackSyncWorker struct {
 	river.WorkerDefaults[SlackSyncJobArgs]
-	store *store.Store
-	cfg   *config.Config
+	store  *store.Store
+	cfg    *config.Config
+	jobCtx *JobContext
 }
 
-func NewSlackSyncWorker(s *store.Store, cfg *config.Config) *SlackSyncWorker {
-	return &SlackSyncWorker{store: s, cfg: cfg}
+func NewSlackSyncWorker(s *store.Store, cfg *config.Config, jobCtx *JobContext) *SlackSyncWorker {
+	return &SlackSyncWorker{store: s, cfg: cfg, jobCtx: jobCtx}
 }
 
 func (w *SlackSyncWorker) Work(ctx context.Context, job *river.Job[SlackSyncJobArgs]) error {
@@ -126,7 +127,7 @@ func (w *SlackSyncWorker) Work(ctx context.Context, job *river.Job[SlackSyncJobA
 }
 
 func (w *SlackSyncWorker) enqueueEmbed(ctx context.Context, args SlackSyncJobArgs) {
-	client := getRiverClient()
+	client := w.jobCtx.Client()
 	if client == nil {
 		slog.Warn("slack_sync: river client not available, skipping embed enqueue")
 		return

@@ -1,5 +1,17 @@
-// ─── Pagination ───────────────────────────────────────────────────────────────
+/**
+ * Frontend-maintained API types.
+ *
+ * This file extends `types.gen.ts` with frontend-specific concerns that are
+ * intentionally hand-written, including:
+ * - UI/state-oriented shapes (e.g. filters, payloads, paginated wrappers)
+ * - camelCase request/response models used by the web client
+ * - composed/enriched view models that flatten or join backend data
+ *
+ * Keep domain-struct mirrors in sync with backend types, and prefer moving
+ * exact domain copies into `types.gen.ts` over time.
+ */
 
+// ─── Pagination ───────────────────────────────────────────────────────────────
 export interface PageParams {
 	page?: number;
 	pageSize?: number;
@@ -317,6 +329,7 @@ export interface SubscriptionResponse {
 
 // ─── LLM Usage ───────────────────────────────────────────────────────────────
 
+// TODO: auto-generate from domain.LLMUsageAgg
 export interface LLMUsageAgg {
 	total_calls: number;
 	total_tokens_in: number;
@@ -326,6 +339,7 @@ export interface LLMUsageAgg {
 	p95_latency_ms: number;
 }
 
+// TODO: auto-generate from domain.LLMCall
 export interface LLMCall {
 	id: string;
 	project_id: string;
@@ -348,7 +362,6 @@ export interface LLMCallsPage {
 }
 
 // ─── Onboarding ──────────────────────────────────────────────────────────────
-
 export type OnboardingStep = 'welcome' | 'org' | 'project' | 'signal' | 'synthesis' | 'done';
 
 export interface OnboardingStatus {
@@ -462,6 +475,7 @@ export interface OrgAnalytics {
 
 export type ContextCategory = 'insight' | 'theme' | 'decision' | 'risk' | 'opportunity';
 
+// TODO: auto-generate from domain.ProjectContext
 export interface ProjectContext {
 	id: string;
 	project_id: string;
@@ -487,7 +501,6 @@ export interface UpdateProjectContextPayload {
 }
 
 // ─── Notifications ────────────────────────────────────────────────────────────
-
 export type NotificationType =
 	| 'pipeline_completed'
 	| 'pipeline_failed'

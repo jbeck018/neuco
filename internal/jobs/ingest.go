@@ -27,14 +27,14 @@ const longFormThreshold = 2000
 // Short content is stored as a single signal without LLM processing.
 type IngestWorker struct {
 	river.WorkerDefaults[IngestJobArgs]
-	store *store.Store
-	cfg   *config.Config
+	store  *store.Store
+	cfg    *config.Config
+	jobCtx *JobContext
 }
 
-func NewIngestWorker(s *store.Store, cfg *config.Config) *IngestWorker {
-	return &IngestWorker{store: s, cfg: cfg}
+func NewIngestWorker(s *store.Store, cfg *config.Config, jobCtx *JobContext) *IngestWorker {
+	return &IngestWorker{store: s, cfg: cfg, jobCtx: jobCtx}
 }
-
 func (w *IngestWorker) Work(ctx context.Context, job *river.Job[IngestJobArgs]) error {
 	start := time.Now()
 	StartTask(ctx, w.store, job.Args.TaskID)
@@ -93,7 +93,6 @@ func (w *IngestWorker) processLongForm(
 
 	extracted, err := agent.Process(ctx, job.Args.ProjectID, content)
 	if err != nil {
-		// Log but don't fail the job — partial signals may have been stored.
 		slog.Error("ingest: TranscriptAgent error", "error", err, "project_id", job.Args.ProjectID)
 	}
 
@@ -104,7 +103,6 @@ func (w *IngestWorker) processLongForm(
 
 	CompleteTask(ctx, w.store, job.Args.TaskID, start)
 
-	// Enqueue embedding for every extracted signal.
 	if len(extracted) == 0 {
 		CheckPipelineCompletion(ctx, w.store, job.Args.RunID)
 		return nil
@@ -115,7 +113,7 @@ func (w *IngestWorker) processLongForm(
 		signalIDs[i] = s.ID
 	}
 
-	client := getRiverClient()
+	client := w.jobCtx.Client()
 	if client != nil {
 		run, runErr := w.store.GetPipelineRun(ctx, job.Args.RunID)
 		var embedTaskID uuid.UUID
@@ -200,8 +198,7 @@ func (w *IngestWorker) processShortForm(
 
 	CompleteTask(ctx, w.store, job.Args.TaskID, start)
 
-	// Chain: enqueue embedding job for this signal.
-	client := getRiverClient()
+	client := w.jobCtx.Client()
 	if client != nil {
 		run, err := w.store.GetPipelineRun(ctx, job.Args.RunID)
 		var embedTaskID uuid.UUID
@@ -227,7 +224,6 @@ func (w *IngestWorker) processShortForm(
 
 	return nil
 }
-
 // EmbedWorker generates embeddings for signals that don't have them.
 type EmbedWorker struct {
 	river.WorkerDefaults[EmbedJobArgs]

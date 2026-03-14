@@ -10,50 +10,58 @@ import (
 	"github.com/neuco-ai/neuco/internal/store"
 )
 
-// riverClient is set after the River client is created in main.
-// Workers use this to chain jobs (enqueue the next step in a pipeline).
-var (
-	riverClientMu sync.RWMutex
-	riverClient   *river.Client[pgx.Tx]
-)
-
-func SetRiverClient(c *river.Client[pgx.Tx]) {
-	riverClientMu.Lock()
-	defer riverClientMu.Unlock()
-	riverClient = c
+// JobContext holds runtime worker dependencies that are initialized after
+// worker registration (e.g. the River client used for job chaining).
+type JobContext struct {
+	mu     sync.RWMutex
+	client *river.Client[pgx.Tx]
 }
 
-func getRiverClient() *river.Client[pgx.Tx] {
-	riverClientMu.RLock()
-	defer riverClientMu.RUnlock()
-	return riverClient
+func NewJobContext() *JobContext {
+	return &JobContext{}
+}
+
+func (c *JobContext) SetClient(client *river.Client[pgx.Tx]) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.client = client
+}
+
+func (c *JobContext) Client() *river.Client[pgx.Tx] {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.client
 }
 
 // RegisterAllWorkers registers all worker types with the River workers registry.
-func RegisterAllWorkers(workers *river.Workers, s *store.Store, cfg *config.Config) {
-	river.AddWorker(workers, NewIngestWorker(s, cfg))
+func RegisterAllWorkers(workers *river.Workers, s *store.Store, cfg *config.Config) *JobContext {
+	jobCtx := NewJobContext()
+
+	river.AddWorker(workers, NewIngestWorker(s, cfg, jobCtx))
 	river.AddWorker(workers, NewEmbedWorker(s, cfg))
-	river.AddWorker(workers, NewFetchSignalsWorker(s))
-	river.AddWorker(workers, NewClusterThemesWorker(s))
-	river.AddWorker(workers, NewNameThemesWorker(s, cfg))
-	river.AddWorker(workers, NewScoreCandidatesWorker(s))
-	river.AddWorker(workers, NewWriteCandidatesWorker(s))
-	river.AddWorker(workers, NewUpdateContextWorker(s, cfg))
-	river.AddWorker(workers, NewSpecGenWorker(s, cfg))
-	river.AddWorker(workers, NewFetchSpecWorker(s))
-	river.AddWorker(workers, NewIndexRepoWorker(s, cfg))
-	river.AddWorker(workers, NewBuildContextWorker(s))
-	river.AddWorker(workers, NewGenerateCodeWorker(s, cfg))
-	river.AddWorker(workers, NewCreatePRWorker(s, cfg))
-	river.AddWorker(workers, NewNotifyWorker(s, cfg))
-	river.AddWorker(workers, NewDigestAllProjectsWorker(s))
+	river.AddWorker(workers, NewFetchSignalsWorker(s, jobCtx))
+	river.AddWorker(workers, NewClusterThemesWorker(s, jobCtx))
+	river.AddWorker(workers, NewNameThemesWorker(s, cfg, jobCtx))
+	river.AddWorker(workers, NewScoreCandidatesWorker(s, jobCtx))
+	river.AddWorker(workers, NewWriteCandidatesWorker(s, jobCtx))
+	river.AddWorker(workers, NewUpdateContextWorker(s, cfg, jobCtx))
+	river.AddWorker(workers, NewSpecGenWorker(s, cfg, jobCtx))
+	river.AddWorker(workers, NewFetchSpecWorker(s, jobCtx))
+	river.AddWorker(workers, NewIndexRepoWorker(s, cfg, jobCtx))
+	river.AddWorker(workers, NewBuildContextWorker(s, jobCtx))
+	river.AddWorker(workers, NewGenerateCodeWorker(s, cfg, jobCtx))
+	river.AddWorker(workers, NewCreatePRWorker(s, cfg, jobCtx))
+	river.AddWorker(workers, NewNotifyWorker(s, cfg, jobCtx))
+	river.AddWorker(workers, NewDigestAllProjectsWorker(s, jobCtx))
 	river.AddWorker(workers, NewCopilotReviewWorker(s, cfg))
-	river.AddWorker(workers, NewNangoSyncWorker(s, cfg))
-	river.AddWorker(workers, NewSyncAllIntegrationsWorker(s, cfg))
-	river.AddWorker(workers, NewIntercomSyncWorker(s, cfg))
-	river.AddWorker(workers, NewSlackSyncWorker(s, cfg))
-	river.AddWorker(workers, NewLinearSyncWorker(s, cfg))
-	river.AddWorker(workers, NewJiraSyncWorker(s, cfg))
-	river.AddWorker(workers, NewSendEmailWorker(s, cfg))
+	river.AddWorker(workers, NewNangoSyncWorker(s, cfg, jobCtx))
+	river.AddWorker(workers, NewSyncAllIntegrationsWorker(s, cfg, jobCtx))
+	river.AddWorker(workers, NewIntercomSyncWorker(s, cfg, jobCtx))
+	river.AddWorker(workers, NewSlackSyncWorker(s, cfg, jobCtx))
+	river.AddWorker(workers, NewLinearSyncWorker(s, cfg, jobCtx))
+	river.AddWorker(workers, NewJiraSyncWorker(s, cfg, jobCtx))
+	river.AddWorker(workers, NewSendEmailWorker(s, cfg, jobCtx))
 	river.AddWorker(workers, NewDigestEmailsWorker(s, cfg))
+
+	return jobCtx
 }

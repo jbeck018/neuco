@@ -19,12 +19,13 @@ import (
 // integration's Config["access_token"] field.
 type IntercomSyncWorker struct {
 	river.WorkerDefaults[IntercomSyncJobArgs]
-	store *store.Store
-	cfg   *config.Config
+	store  *store.Store
+	cfg    *config.Config
+	jobCtx *JobContext
 }
 
-func NewIntercomSyncWorker(s *store.Store, cfg *config.Config) *IntercomSyncWorker {
-	return &IntercomSyncWorker{store: s, cfg: cfg}
+func NewIntercomSyncWorker(s *store.Store, cfg *config.Config, jobCtx *JobContext) *IntercomSyncWorker {
+	return &IntercomSyncWorker{store: s, cfg: cfg, jobCtx: jobCtx}
 }
 
 func (w *IntercomSyncWorker) Work(ctx context.Context, job *river.Job[IntercomSyncJobArgs]) error {
@@ -112,7 +113,7 @@ func (w *IntercomSyncWorker) Work(ctx context.Context, job *river.Job[IntercomSy
 }
 
 func (w *IntercomSyncWorker) enqueueEmbed(ctx context.Context, args IntercomSyncJobArgs) {
-	client := getRiverClient()
+	client := w.jobCtx.Client()
 	if client == nil {
 		slog.Warn("intercom_sync: river client not available, skipping embed enqueue")
 		return

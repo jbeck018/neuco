@@ -11,8 +11,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  run-migrations:
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install golang-migrate
+        run: |
+          curl -L https://github.com/golang-migrate/migrate/releases/download/v4.17.0/migrate.linux-amd64.tar.gz | tar xvz
+          sudo mv migrate /usr/local/bin/
+
+      - name: Run migrations on production DB
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: migrate -path migrations -database "$DATABASE_URL" up
+
   deploy-backend:
     runs-on: ubuntu-latest
+    needs: run-migrations
     if: github.event.workflow_run.conclusion == 'success'
 
     strategy:

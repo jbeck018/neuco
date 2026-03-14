@@ -8,6 +8,7 @@ import (
 	"github.com/neuco-ai/neuco/internal/ai"
 	"github.com/neuco-ai/neuco/internal/api/handlers"
 	"github.com/neuco-ai/neuco/internal/config"
+	"github.com/neuco-ai/neuco/internal/jobs"
 	"github.com/neuco-ai/neuco/internal/store"
 	"github.com/riverqueue/river"
 )
@@ -18,13 +19,14 @@ import (
 type Deps = handlers.Deps
 
 // NewDeps constructs a Deps from the application's core services.
-func NewDeps(s *store.Store, riverClient *river.Client[pgx.Tx], cfg *config.Config, db *pgxpool.Pool) *Deps {
+func NewDeps(s *store.Store, riverClient *river.Client[pgx.Tx], jobCtx *jobs.JobContext, cfg *config.Config, db *pgxpool.Pool) *Deps {
 	llm := ai.NewLLMClient(cfg.AnthropicAPIKey, cfg.OpenAIAPIKey)
 	queryEngine := ai.NewSignalQueryEngine(llm, s)
 
 	return &Deps{
 		Store:       s,
 		River:       riverClient,
+		JobCtx:      jobCtx,
 		Config:      cfg,
 		DB:          db,
 		QueryEngine: queryEngine,

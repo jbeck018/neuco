@@ -24,13 +24,14 @@ import (
 // which stores the raw API response as a single "event" signal.
 type NangoSyncWorker struct {
 	river.WorkerDefaults[NangoSyncJobArgs]
-	store *store.Store
-	cfg   *config.Config
+	store  *store.Store
+	cfg    *config.Config
+	jobCtx *JobContext
 }
 
 // NewNangoSyncWorker constructs a NangoSyncWorker.
-func NewNangoSyncWorker(s *store.Store, cfg *config.Config) *NangoSyncWorker {
-	return &NangoSyncWorker{store: s, cfg: cfg}
+func NewNangoSyncWorker(s *store.Store, cfg *config.Config, jobCtx *JobContext) *NangoSyncWorker {
+	return &NangoSyncWorker{store: s, cfg: cfg, jobCtx: jobCtx}
 }
 
 // Work implements river.Worker[NangoSyncJobArgs].
@@ -147,7 +148,7 @@ func (w *NangoSyncWorker) fetchSignals(
 // receive vector embeddings asynchronously. It is best-effort: failures are
 // logged but do not prevent the sync job from completing successfully.
 func (w *NangoSyncWorker) enqueueEmbed(ctx context.Context, args NangoSyncJobArgs) {
-	client := getRiverClient()
+	client := w.jobCtx.Client()
 	if client == nil {
 		slog.Warn("nango_sync: river client not available, skipping embed enqueue")
 		return
@@ -188,13 +189,14 @@ func (w *NangoSyncWorker) enqueueEmbed(ctx context.Context, args NangoSyncJobArg
 // to keep all Gong/Intercom/Slack connections synced automatically.
 type SyncAllIntegrationsWorker struct {
 	river.WorkerDefaults[SyncAllIntegrationsJobArgs]
-	store *store.Store
-	cfg   *config.Config
+	store  *store.Store
+	cfg    *config.Config
+	jobCtx *JobContext
 }
 
 // NewSyncAllIntegrationsWorker constructs a SyncAllIntegrationsWorker.
-func NewSyncAllIntegrationsWorker(s *store.Store, cfg *config.Config) *SyncAllIntegrationsWorker {
-	return &SyncAllIntegrationsWorker{store: s, cfg: cfg}
+func NewSyncAllIntegrationsWorker(s *store.Store, cfg *config.Config, jobCtx *JobContext) *SyncAllIntegrationsWorker {
+	return &SyncAllIntegrationsWorker{store: s, cfg: cfg, jobCtx: jobCtx}
 }
 
 // Work implements river.Worker[SyncAllIntegrationsJobArgs].
@@ -211,7 +213,7 @@ func (w *SyncAllIntegrationsWorker) Work(ctx context.Context, _ *river.Job[SyncA
 		return nil
 	}
 
-	client := getRiverClient()
+	client := w.jobCtx.Client()
 	if client == nil {
 		return fmt.Errorf("sync_all_integrations: river client not available")
 	}

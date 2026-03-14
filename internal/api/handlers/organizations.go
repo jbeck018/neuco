@@ -57,27 +57,36 @@ func ListOrgs(d *Deps) http.HandlerFunc {
 func CreateOrg(d *Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req createOrgRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Name) == "" {
-			respondErr(w, r, http.StatusBadRequest, "name is required")
-			return
-		}
-		if msg := validateStringLen("name", req.Name, MaxNameLen); msg != "" {
-			respondErr(w, r, http.StatusBadRequest, msg)
-			return
-		}
-		if msg := validateStringLen("slug", req.Slug, MaxSlugLen); msg != "" {
-			respondErr(w, r, http.StatusBadRequest, msg)
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondErr(w, r, http.StatusBadRequest, "invalid request body")
 			return
 		}
 
-		slug := req.Slug
+		name := strings.TrimSpace(req.Name)
+		slug := strings.TrimSpace(req.Slug)
+
+		validationErr := &ValidationError{}
+		if msg := ValidateRequired("name", name); msg != "" {
+			validationErr.Add("name", msg)
+		}
+		if msg := ValidateMaxLength("name", name, MaxNameLen); msg != "" {
+			validationErr.Add("name", msg)
+		}
+		if msg := ValidateMaxLength("slug", slug, MaxSlugLen); msg != "" {
+			validationErr.Add("slug", msg)
+		}
+		if validationErr.HasErrors() {
+			respondValidation(w, r, validationErr)
+			return
+		}
+
 		if slug == "" {
-			slug = slugify(req.Name)
+			slug = slugify(name)
 		}
 
 		userID := mw.UserIDFromCtx(r.Context())
 
-		org, err := d.Store.CreateOrg(r.Context(), strings.TrimSpace(req.Name), slug, domain.OrgPlanStarter)
+		org, err := d.Store.CreateOrg(r.Context(), name, slug, domain.OrgPlanStarter)
 		if err != nil {
 			respondErr(w, r, http.StatusInternalServerError, "failed to create org")
 			return
@@ -121,13 +130,17 @@ func UpdateOrg(d *Deps) http.HandlerFunc {
 		}
 
 		var name *string
+		validationErr := &ValidationError{}
 		if req.Name != nil {
 			trimmed := strings.TrimSpace(*req.Name)
-			if msg := validateStringLen("name", trimmed, MaxNameLen); msg != "" {
-				respondErr(w, r, http.StatusBadRequest, msg)
-				return
+			if msg := ValidateMaxLength("name", trimmed, MaxNameLen); msg != "" {
+				validationErr.Add("name", msg)
 			}
 			name = &trimmed
+		}
+		if validationErr.HasErrors() {
+			respondValidation(w, r, validationErr)
+			return
 		}
 
 		updated, err := d.Store.UpdateOrg(r.Context(), orgID, name, nil)

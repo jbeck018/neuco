@@ -281,7 +281,7 @@ func NewRouter(d *Deps, logger *slog.Logger) http.Handler {
 		r.Get("/orgs/{orgId}", handlers.OperatorGetOrg(d))
 		r.Get("/users", handlers.OperatorListUsers(d))
 		r.Get("/health", handlers.OperatorHealth(d))
-
+		r.Get("/metrics", handlers.OperatorMetrics())
 		// Feature flags.
 		r.Get("/flags", handlers.OperatorListFlags(d))
 		r.Patch("/flags/{key}", handlers.OperatorUpdateFlag(d))

@@ -19,13 +19,13 @@ import (
 // FetchSignalsWorker fetches recent signals and enqueues embedding.
 type FetchSignalsWorker struct {
 	river.WorkerDefaults[FetchSignalsJobArgs]
-	store *store.Store
+	store  *store.Store
+	jobCtx *JobContext
 }
 
-func NewFetchSignalsWorker(s *store.Store) *FetchSignalsWorker {
-	return &FetchSignalsWorker{store: s}
+func NewFetchSignalsWorker(s *store.Store, jobCtx *JobContext) *FetchSignalsWorker {
+	return &FetchSignalsWorker{store: s, jobCtx: jobCtx}
 }
-
 func (w *FetchSignalsWorker) Work(ctx context.Context, job *river.Job[FetchSignalsJobArgs]) error {
 	start := time.Now()
 	StartTask(ctx, w.store, job.Args.TaskID)
@@ -64,7 +64,7 @@ func (w *FetchSignalsWorker) Work(ctx context.Context, job *river.Job[FetchSigna
 				}
 			}
 
-			client := getRiverClient()
+			client := w.jobCtx.Client()
 			if client != nil {
 				_, err := client.Insert(ctx, EmbedJobArgs{
 					ProjectID: job.Args.ProjectID,
@@ -78,11 +78,10 @@ func (w *FetchSignalsWorker) Work(ctx context.Context, job *river.Job[FetchSigna
 			}
 		}
 	}
-
 	CompleteTask(ctx, w.store, job.Args.TaskID, start)
 
 	// Chain: enqueue cluster_themes
-	client := getRiverClient()
+	client := w.jobCtx.Client()
 	if client != nil {
 		run, _ := w.store.GetPipelineRun(ctx, job.Args.RunID)
 		var clusterTaskID uuid.UUID
@@ -111,13 +110,13 @@ func (w *FetchSignalsWorker) Work(ctx context.Context, job *river.Job[FetchSigna
 // ClusterThemesWorker groups signals by embedding similarity.
 type ClusterThemesWorker struct {
 	river.WorkerDefaults[ClusterThemesJobArgs]
-	store *store.Store
+	store  *store.Store
+	jobCtx *JobContext
 }
 
-func NewClusterThemesWorker(s *store.Store) *ClusterThemesWorker {
-	return &ClusterThemesWorker{store: s}
+func NewClusterThemesWorker(s *store.Store, jobCtx *JobContext) *ClusterThemesWorker {
+	return &ClusterThemesWorker{store: s, jobCtx: jobCtx}
 }
-
 func (w *ClusterThemesWorker) Work(ctx context.Context, job *river.Job[ClusterThemesJobArgs]) error {
 	start := time.Now()
 	StartTask(ctx, w.store, job.Args.TaskID)
@@ -185,7 +184,7 @@ func (w *ClusterThemesWorker) Work(ctx context.Context, job *river.Job[ClusterTh
 	CompleteTask(ctx, w.store, job.Args.TaskID, start)
 
 	// Chain: enqueue name_themes
-	client := getRiverClient()
+	client := w.jobCtx.Client()
 	if client != nil {
 		run, _ := w.store.GetPipelineRun(ctx, job.Args.RunID)
 		var nameTaskID uuid.UUID
@@ -338,14 +337,14 @@ func cosineDistance(a, b []float32) float64 {
 // NameThemesWorker names each cluster using an LLM call.
 type NameThemesWorker struct {
 	river.WorkerDefaults[NameThemesJobArgs]
-	store *store.Store
-	cfg   *config.Config
+	store  *store.Store
+	cfg    *config.Config
+	jobCtx *JobContext
 }
 
-func NewNameThemesWorker(s *store.Store, cfg *config.Config) *NameThemesWorker {
-	return &NameThemesWorker{store: s, cfg: cfg}
+func NewNameThemesWorker(s *store.Store, cfg *config.Config, jobCtx *JobContext) *NameThemesWorker {
+	return &NameThemesWorker{store: s, cfg: cfg, jobCtx: jobCtx}
 }
-
 func (w *NameThemesWorker) Work(ctx context.Context, job *river.Job[NameThemesJobArgs]) error {
 	start := time.Now()
 	StartTask(ctx, w.store, job.Args.TaskID)
@@ -416,7 +415,7 @@ func (w *NameThemesWorker) Work(ctx context.Context, job *river.Job[NameThemesJo
 	CompleteTask(ctx, w.store, job.Args.TaskID, start)
 
 	// Chain: score_candidates
-	client := getRiverClient()
+	client := w.jobCtx.Client()
 	if client != nil {
 		run, _ := w.store.GetPipelineRun(ctx, job.Args.RunID)
 		var scoreTaskID uuid.UUID
@@ -506,13 +505,13 @@ Signals:
 // ScoreCandidatesWorker scores feature candidates by frequency, recency, and weight.
 type ScoreCandidatesWorker struct {
 	river.WorkerDefaults[ScoreCandidatesJobArgs]
-	store *store.Store
+	store  *store.Store
+	jobCtx *JobContext
 }
 
-func NewScoreCandidatesWorker(s *store.Store) *ScoreCandidatesWorker {
-	return &ScoreCandidatesWorker{store: s}
+func NewScoreCandidatesWorker(s *store.Store, jobCtx *JobContext) *ScoreCandidatesWorker {
+	return &ScoreCandidatesWorker{store: s, jobCtx: jobCtx}
 }
-
 func (w *ScoreCandidatesWorker) Work(ctx context.Context, job *river.Job[ScoreCandidatesJobArgs]) error {
 	start := time.Now()
 	StartTask(ctx, w.store, job.Args.TaskID)
@@ -564,7 +563,7 @@ func (w *ScoreCandidatesWorker) Work(ctx context.Context, job *river.Job[ScoreCa
 	CompleteTask(ctx, w.store, job.Args.TaskID, start)
 
 	// Chain: write_candidates
-	client := getRiverClient()
+	client := w.jobCtx.Client()
 	if client != nil {
 		run, _ := w.store.GetPipelineRun(ctx, job.Args.RunID)
 		var writeTaskID uuid.UUID
@@ -593,13 +592,13 @@ func (w *ScoreCandidatesWorker) Work(ctx context.Context, job *river.Job[ScoreCa
 // WriteCandidatesWorker finalizes candidates and marks the pipeline complete.
 type WriteCandidatesWorker struct {
 	river.WorkerDefaults[WriteCandidatesJobArgs]
-	store *store.Store
+	store  *store.Store
+	jobCtx *JobContext
 }
 
-func NewWriteCandidatesWorker(s *store.Store) *WriteCandidatesWorker {
-	return &WriteCandidatesWorker{store: s}
+func NewWriteCandidatesWorker(s *store.Store, jobCtx *JobContext) *WriteCandidatesWorker {
+	return &WriteCandidatesWorker{store: s, jobCtx: jobCtx}
 }
-
 func (w *WriteCandidatesWorker) Work(ctx context.Context, job *river.Job[WriteCandidatesJobArgs]) error {
 	start := time.Now()
 	StartTask(ctx, w.store, job.Args.TaskID)
@@ -613,7 +612,7 @@ func (w *WriteCandidatesWorker) Work(ctx context.Context, job *river.Job[WriteCa
 	CompleteTask(ctx, w.store, job.Args.TaskID, start)
 
 	// Chain: update_context (accumulates project memory from synthesis results)
-	client := getRiverClient()
+	client := w.jobCtx.Client()
 	if client != nil {
 		run, _ := w.store.GetPipelineRun(ctx, job.Args.RunID)
 		var contextTaskID uuid.UUID
@@ -642,13 +641,13 @@ func (w *WriteCandidatesWorker) Work(ctx context.Context, job *river.Job[WriteCa
 // DigestAllProjectsWorker runs synthesis for all active projects (weekly cron).
 type DigestAllProjectsWorker struct {
 	river.WorkerDefaults[DigestAllProjectsJobArgs]
-	store *store.Store
+	store  *store.Store
+	jobCtx *JobContext
 }
 
-func NewDigestAllProjectsWorker(s *store.Store) *DigestAllProjectsWorker {
-	return &DigestAllProjectsWorker{store: s}
+func NewDigestAllProjectsWorker(s *store.Store, jobCtx *JobContext) *DigestAllProjectsWorker {
+	return &DigestAllProjectsWorker{store: s, jobCtx: jobCtx}
 }
-
 func (w *DigestAllProjectsWorker) Work(ctx context.Context, _ *river.Job[DigestAllProjectsJobArgs]) error {
 	slog.Info("running weekly digest for all projects")
 
@@ -657,11 +656,10 @@ func (w *DigestAllProjectsWorker) Work(ctx context.Context, _ *river.Job[DigestA
 		return err
 	}
 
-	client := getRiverClient()
+	client := w.jobCtx.Client()
 	if client == nil {
 		return fmt.Errorf("river client not available")
 	}
-
 	for _, project := range projects {
 		runID, taskIDs, err := CreateSynthesisPipeline(ctx, w.store, project.ID)
 		if err != nil {
