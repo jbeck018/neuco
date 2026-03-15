@@ -282,3 +282,53 @@ type JiraSyncJobArgs struct {
 }
 
 func (JiraSyncJobArgs) Kind() string { return "jira_sync" }
+
+// ============================================================
+// Agent Code Generation Pipeline (v2)
+// ============================================================
+
+type PrepareContextJobArgs struct {
+	SpecID       uuid.UUID `json:"spec_id"`
+	ProjectID    uuid.UUID `json:"project_id"`
+	GenerationID uuid.UUID `json:"generation_id"`
+	RunID        uuid.UUID `json:"run_id"`
+	TaskID       uuid.UUID `json:"task_id"`
+}
+
+func (PrepareContextJobArgs) Kind() string { return "prepare_context" }
+
+type ProvisionSandboxJobArgs struct {
+	SpecID         uuid.UUID       `json:"spec_id"`
+	ProjectID      uuid.UUID       `json:"project_id"`
+	GenerationID   uuid.UUID       `json:"generation_id"`
+	RunID          uuid.UUID       `json:"run_id"`
+	TaskID         uuid.UUID       `json:"task_id"`
+	ContextPayload json.RawMessage `json:"context_payload"`
+}
+
+func (ProvisionSandboxJobArgs) Kind() string { return "provision_sandbox" }
+
+type RunAgentJobArgs struct {
+	SpecID       uuid.UUID `json:"spec_id"`
+	ProjectID    uuid.UUID `json:"project_id"`
+	GenerationID uuid.UUID `json:"generation_id"`
+	RunID        uuid.UUID `json:"run_id"`
+	TaskID       uuid.UUID `json:"task_id"`
+	SandboxID    string    `json:"sandbox_id"`
+	SessionID    uuid.UUID `json:"session_id"`
+}
+
+func (RunAgentJobArgs) Kind() string { return "run_agent" }
+
+type ValidateOutputJobArgs struct {
+	SpecID       uuid.UUID `json:"spec_id"`
+	ProjectID    uuid.UUID `json:"project_id"`
+	GenerationID uuid.UUID `json:"generation_id"`
+	RunID        uuid.UUID `json:"run_id"`
+	TaskID       uuid.UUID `json:"task_id"`
+	SandboxID    string    `json:"sandbox_id"`
+	SessionID    uuid.UUID `json:"session_id"`
+	RetryCount   int       `json:"retry_count"`
+}
+
+func (ValidateOutputJobArgs) Kind() string { return "validate_output" }
