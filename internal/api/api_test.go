@@ -25,6 +25,7 @@ import (
 
 	"github.com/neuco-ai/neuco/internal/api"
 	mw "github.com/neuco-ai/neuco/internal/api/middleware"
+	"github.com/neuco-ai/neuco/internal/codegen"
 	"github.com/neuco-ai/neuco/internal/config"
 	"github.com/neuco-ai/neuco/internal/domain"
 	"github.com/neuco-ai/neuco/internal/jobs"
@@ -32,7 +33,6 @@ import (
 )
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
-
 const (
 	testJWTSecret     = "test-jwt-secret-that-is-at-least-32-chars-long"
 	testInternalToken = "test-operator-token-abc123"
@@ -96,13 +96,13 @@ func testSetup(t *testing.T) *testEnv {
 	}
 	jobCtx.SetClient(riverClient)
 
-	deps := api.NewDeps(s, riverClient, jobCtx, cfg, pool)
+	registry := codegen.NewProviderRegistry(codegen.ClaudeCodeProvider{})
+	deps := api.NewDeps(s, riverClient, jobCtx, cfg, pool, registry)
 	handler := api.NewRouter(deps, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	server := httptest.NewServer(handler)
 	return &testEnv{
 		server: server,
-		store:  s,
-		pool:   pool,
+		store:  s, pool: pool,
 		config: cfg,
 		cleanup: func() {
 			server.Close()

@@ -143,11 +143,13 @@ func NewRouter(d *Deps, logger *slog.Logger) http.Handler {
 			})
 		})
 
+		// Agent providers (API-level, not project-scoped).
+		r.Get("/agent-providers", handlers.ListAgentProviders(d))
+
 		// Project-scoped routes — tenant middleware verifies project belongs to org.
 		r.Route("/api/v1/projects/{projectId}", func(r chi.Router) {
 			r.Use(mw.ProjectTenant(d.Store))
 			r.Use(mw.RequireActiveSubscription(d.Store))
-
 			r.Get("/", handlers.GetProjectHandler(d))
 			r.With(mw.RequireRole(domain.OrgRoleAdmin)).Patch("/", handlers.UpdateProject(d))
 			r.With(mw.RequireRole(domain.OrgRoleAdmin)).Delete("/", handlers.DeleteProject(d))
@@ -176,6 +178,14 @@ func NewRouter(d *Deps, logger *slog.Logger) http.Handler {
 				// Codegen (nested under candidates).
 				r.With(mw.GenerationRateLimit(), mw.CheckPRLimit(d.Store)).
 					Post("/{cId}/generate", handlers.EnqueueCodegen(d))
+			})
+
+			// Agent config.
+			r.Route("/agent-config", func(r chi.Router) {
+				r.Get("/", handlers.GetAgentConfig(d))
+				r.Put("/", handlers.UpsertAgentConfig(d))
+				r.Delete("/", handlers.DeleteAgentConfig(d))
+				r.Post("/validate", handlers.ValidateAgentConfig(d))
 			})
 
 			// Generations.

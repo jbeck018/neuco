@@ -14,6 +14,7 @@ import (
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 
 	"github.com/neuco-ai/neuco/internal/api"
+	"github.com/neuco-ai/neuco/internal/codegen"
 	"github.com/neuco-ai/neuco/internal/config"
 	"github.com/neuco-ai/neuco/internal/jobs"
 	"github.com/neuco-ai/neuco/internal/observability"
@@ -71,7 +72,8 @@ func main() {
 
 	jobCtx.SetClient(riverClient)
 
-	deps := api.NewDeps(s, riverClient, jobCtx, cfg, pool)
+	registry := codegen.NewProviderRegistry(codegen.ClaudeCodeProvider{})
+	deps := api.NewDeps(s, riverClient, jobCtx, cfg, pool, registry)
 	// NewRouter constructs the full Chi router with all middleware and routes.
 	handler := api.NewRouter(deps, slog.Default())
 	srv := &http.Server{

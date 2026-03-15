@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/neuco-ai/neuco/internal/ai"
 	"github.com/neuco-ai/neuco/internal/api/handlers"
+	"github.com/neuco-ai/neuco/internal/codegen"
 	"github.com/neuco-ai/neuco/internal/config"
 	"github.com/neuco-ai/neuco/internal/jobs"
 	"github.com/neuco-ai/neuco/internal/store"
@@ -19,16 +20,17 @@ import (
 type Deps = handlers.Deps
 
 // NewDeps constructs a Deps from the application's core services.
-func NewDeps(s *store.Store, riverClient *river.Client[pgx.Tx], jobCtx *jobs.JobContext, cfg *config.Config, db *pgxpool.Pool) *Deps {
+func NewDeps(s *store.Store, riverClient *river.Client[pgx.Tx], jobCtx *jobs.JobContext, cfg *config.Config, db *pgxpool.Pool, providerRegistry *codegen.ProviderRegistry) *Deps {
 	llm := ai.NewLLMClient(cfg.AnthropicAPIKey, cfg.OpenAIAPIKey)
 	queryEngine := ai.NewSignalQueryEngine(llm, s)
 
 	return &Deps{
-		Store:       s,
-		River:       riverClient,
-		JobCtx:      jobCtx,
-		Config:      cfg,
-		DB:          db,
-		QueryEngine: queryEngine,
+		Store:            s,
+		River:            riverClient,
+		JobCtx:           jobCtx,
+		Config:           cfg,
+		DB:               db,
+		QueryEngine:      queryEngine,
+		ProviderRegistry: providerRegistry,
 	}
 }

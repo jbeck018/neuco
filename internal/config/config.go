@@ -77,6 +77,15 @@ type Config struct {
 	// Observability
 	SentryDSN     string `mapstructure:"SENTRY_DSN"`
 	AppEnv        string `mapstructure:"APP_ENV"`
+
+	// Agent Sandbox / Codegen v2
+	E2BAPIKey               string `mapstructure:"E2B_API_KEY"`
+	SandboxProvider         string `mapstructure:"SANDBOX_PROVIDER"`
+	SandboxTimeoutMinutes   int    `mapstructure:"SANDBOX_TIMEOUT_MINUTES"`
+	SandboxMaxRetries       int    `mapstructure:"SANDBOX_MAX_RETRIES"`
+	EncryptionKey           string `mapstructure:"ENCRYPTION_KEY"`
+	SandboxMaxConcurrentOrg int    `mapstructure:"SANDBOX_MAX_CONCURRENT"`
+	SandboxE2BTemplate      string `mapstructure:"SANDBOX_E2B_TEMPLATE"`
 }
 
 // Load reads configuration from environment variables (with optional .env file support
@@ -90,6 +99,11 @@ func Load() (*Config, error) {
 	v.SetDefault("AWS_REGION", "us-east-1")
 	v.SetDefault("NANGO_SERVER_URL", "http://localhost:3003")
 	v.SetDefault("APP_ENV", "development")
+	v.SetDefault("SANDBOX_PROVIDER", "e2b")
+	v.SetDefault("SANDBOX_TIMEOUT_MINUTES", 20)
+	v.SetDefault("SANDBOX_MAX_RETRIES", 3)
+	v.SetDefault("SANDBOX_MAX_CONCURRENT", 5)
+	v.SetDefault("SANDBOX_E2B_TEMPLATE", "neuco-codegen")
 
 	// Bind all environment variables automatically. Viper upper-cases the key
 	// and checks the environment for a matching variable.
@@ -136,6 +150,13 @@ func Load() (*Config, error) {
 		"STRIPE_PRICE_BUILDER",
 		"SENTRY_DSN",
 		"APP_ENV",
+		"E2B_API_KEY",
+		"SANDBOX_PROVIDER",
+		"SANDBOX_TIMEOUT_MINUTES",
+		"SANDBOX_MAX_RETRIES",
+		"ENCRYPTION_KEY",
+		"SANDBOX_MAX_CONCURRENT",
+		"SANDBOX_E2B_TEMPLATE",
 	}
 	for _, k := range keys {
 		if err := v.BindEnv(k); err != nil {
