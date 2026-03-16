@@ -19,7 +19,7 @@ migrate-down:
 	migrate -path migrations -database "$$DATABASE_URL" down 1
 
 gen:
-	go run scripts/gen_types.go
+	cd neuco-web && pnpm generate:api
 
 test:
 	go test ./... -race -count=1
