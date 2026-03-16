@@ -72,7 +72,15 @@ func main() {
 
 	jobCtx.SetClient(riverClient)
 
-	registry := codegen.NewProviderRegistry(codegen.ClaudeCodeProvider{})
+	registry := codegen.NewProviderRegistry(
+		codegen.ClaudeCodeProvider{},
+		codegen.CodexProvider{},
+		codegen.GeminiProvider{},
+		codegen.OpenCodeProvider{},
+		codegen.SlateProvider{},
+		codegen.AiderProvider{},
+		codegen.GenericProvider{},
+	)
 	deps := api.NewDeps(s, riverClient, jobCtx, cfg, pool, registry)
 	// NewRouter constructs the full Chi router with all middleware and routes.
 	handler := api.NewRouter(deps, slog.Default())
