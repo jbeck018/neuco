@@ -2,13 +2,13 @@ package codegen
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"github.com/neuco-ai/neuco/internal/config"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/neuco-ai/neuco/internal/config"
 )
 
 // SandboxManager abstracts sandbox lifecycle and command execution.
@@ -89,8 +89,13 @@ func NewSandboxManager(provider string, cfg *config.Config) (SandboxManager, err
 			basePath = filepath.Join(os.TempDir(), "neuco-sandboxes")
 		}
 		return NewLocalSandboxManager(basePath), nil
-	case "e2b", "docker":
-		return nil, fmt.Errorf("sandbox provider %q is not implemented", selected)
+	case "e2b":
+		if cfg == nil {
+			return nil, errors.New("sandbox provider \"e2b\" requires config")
+		}
+		return NewE2BSandboxManager(cfg.E2BAPIKey, cfg.SandboxE2BTemplate), nil
+	case "docker":
+		return NewDockerSandboxManager(""), nil
 	default:
 		return nil, fmt.Errorf("unknown sandbox provider %q", selected)
 	}
