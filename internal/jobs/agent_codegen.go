@@ -515,16 +515,16 @@ func (w *ValidateOutputWorker) Work(ctx context.Context, job *river.Job[Validate
 			}
 			result, execErr := w.sandboxManager.Execute(ctx, sb, parts[0], parts[1:]...)
 			if execErr != nil {
-				validationLog.WriteString(fmt.Sprintf("ERROR: %s: %v\n", cmdStr, execErr))
+				fmt.Fprintf(&validationLog, "ERROR: %s: %v\n", cmdStr, execErr)
 				// Execution errors (command not found, etc) are not validation failures
 				// They indicate the command doesnt apply to this project - skip
 				continue
 			}
 			if result.ExitCode != 0 {
 				validationPassed = false
-				validationLog.WriteString(fmt.Sprintf("FAIL: %s (exit %d)\n%s\n%s\n", cmdStr, result.ExitCode, result.Stdout, result.Stderr))
+				fmt.Fprintf(&validationLog, "FAIL: %s (exit %d)\n%s\n%s\n", cmdStr, result.ExitCode, result.Stdout, result.Stderr)
 			} else {
-				validationLog.WriteString(fmt.Sprintf("PASS: %s\n", cmdStr))
+				fmt.Fprintf(&validationLog, "PASS: %s\n", cmdStr)
 			}
 		}
 	}
