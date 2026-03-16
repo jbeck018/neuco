@@ -1,7 +1,4 @@
-import { browser } from '$app/environment';
-import { goto } from '$app/navigation';
-
-// ─── Error Types ──────────────────────────────────────────────────────────────
+import { api } from './typed-client';
 
 export class ApiError extends Error {
 	constructor(
@@ -13,80 +10,6 @@ export class ApiError extends Error {
 		this.name = 'ApiError';
 	}
 }
-
-// ─── Config ───────────────────────────────────────────────────────────────────
-
-function getBaseUrl(): string {
-	if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) {
-		return import.meta.env.VITE_API_BASE_URL as string;
-	}
-	return 'http://localhost:8080';
-}
-
-// ─── Token Management ─────────────────────────────────────────────────────────
-
-function getAccessToken(): string | null {
-	if (!browser) return null;
-	return localStorage.getItem('access_token');
-}
-
-function getTokenExpiry(): number | null {
-	if (!browser) return null;
-	const val = localStorage.getItem('access_token_expires_at');
-	return val ? Number(val) : null;
-}
-
-function isTokenExpiringSoon(): boolean {
-	const expiresAt = getTokenExpiry();
-	if (!expiresAt) return false;
-	// Refresh if less than 5 minutes remaining
-	return Date.now() > expiresAt - 5 * 60 * 1000;
-}
-
-// ─── Silent Token Refresh ─────────────────────────────────────────────────────
-
-let refreshPromise: Promise<boolean> | null = null;
-
-async function silentRefresh(): Promise<boolean> {
-	// Deduplicate concurrent refresh attempts
-	if (refreshPromise) return refreshPromise;
-
-	refreshPromise = doRefresh();
-	try {
-		return await refreshPromise;
-	} finally {
-		refreshPromise = null;
-	}
-}
-
-async function doRefresh(): Promise<boolean> {
-	try {
-		const baseUrl = getBaseUrl();
-		const response = await fetch(`${baseUrl}/api/v1/auth/refresh`, {
-			method: 'POST',
-			credentials: 'include' // send httpOnly cookie
-		});
-
-		if (!response.ok) return false;
-
-		const data = await response.json();
-		if (data.access_token) {
-			localStorage.setItem('access_token', data.access_token);
-			if (data.expires_in) {
-				const expiresAt = Date.now() + data.expires_in * 1000;
-				localStorage.setItem('access_token_expires_at', String(expiresAt));
-			}
-			return true;
-		}
-		return false;
-	} catch {
-		return false;
-	}
-}
-
-// ─── snake_case → camelCase transformer ───────────────────────────────────────
-// The Go backend sends snake_case JSON keys. The frontend uses camelCase types.
-// This transformer converts all object keys recursively on every API response.
 
 function snakeToCamel(str: string): string {
 	return str.replace(/_([a-z0-9])/g, (_, letter) => letter.toUpperCase());
@@ -105,12 +28,11 @@ export function transformKeys(obj: unknown): unknown {
 	return obj;
 }
 
-// Also transform camelCase request bodies → snake_case for the backend
 function camelToSnake(str: string): string {
 	return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
 }
 
-function transformKeysToSnake(obj: unknown): unknown {
+export function transformKeysToSnake(obj: unknown): unknown {
 	if (obj === null || obj === undefined) return obj;
 	if (Array.isArray(obj)) return obj.map(transformKeysToSnake);
 	if (typeof obj === 'object') {
@@ -123,129 +45,53 @@ function transformKeysToSnake(obj: unknown): unknown {
 	return obj;
 }
 
-// ─── Core Fetch ───────────────────────────────────────────────────────────────
-
 interface RequestOptions {
 	headers?: Record<string, string>;
 	signal?: AbortSignal;
 }
 
 async function request<T>(
-	method: string,
+	method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE',
 	path: string,
 	body?: unknown,
 	options: RequestOptions = {}
 ): Promise<T> {
-	// Proactively refresh if token is expiring soon
-	if (browser && isTokenExpiringSoon() && getAccessToken()) {
-		await silentRefresh();
+	const requestOptions: Record<string, unknown> = {};
+
+	if (options.signal) requestOptions.signal = options.signal;
+	if (options.headers) requestOptions.headers = options.headers;
+	if (body !== undefined) requestOptions.body = transformKeysToSnake(body);
+
+	const response = await (api as any)[method](path, requestOptions);
+
+	if (response.error) {
+		throw new ApiError(
+			response.response.status,
+			response.response.statusText,
+			transformKeys(response.error)
+		);
 	}
 
-	const baseUrl = getBaseUrl();
-	const url = `${baseUrl}${path}`;
-
-	const headers: Record<string, string> = {
-		'Content-Type': 'application/json',
-		...options.headers
-	};
-
-	const token = getAccessToken();
-	if (token) {
-		headers['Authorization'] = `Bearer ${token}`;
-	}
-
-	const init: RequestInit = {
-		method,
-		headers,
-		credentials: 'include', // always send cookies for refresh token
-		signal: options.signal
-	};
-
-	if (body !== undefined) {
-		// Transform outgoing camelCase keys to snake_case for Go backend
-		init.body = JSON.stringify(transformKeysToSnake(body));
-	}
-
-	let response: Response;
-	try {
-		response = await fetch(url, init);
-	} catch (err) {
-		throw new ApiError(0, 'Network error', err);
-	}
-
-	// On 401, attempt a silent refresh and retry once
-	if (response.status === 401 && browser) {
-		const refreshed = await silentRefresh();
-		if (refreshed) {
-			// Retry the original request with the new token
-			const newToken = getAccessToken();
-			if (newToken) {
-				headers['Authorization'] = `Bearer ${newToken}`;
-			}
-			const retryInit: RequestInit = { method, headers, credentials: 'include', signal: options.signal };
-			if (body !== undefined) {
-				retryInit.body = JSON.stringify(transformKeysToSnake(body));
-			}
-			try {
-				response = await fetch(url, retryInit);
-			} catch (err) {
-				throw new ApiError(0, 'Network error', err);
-			}
-		}
-
-		// If still 401 after refresh attempt, redirect to login
-		if (response.status === 401) {
-			localStorage.removeItem('access_token');
-			localStorage.removeItem('access_token_expires_at');
-			await goto('/login');
-			throw new ApiError(401, 'Unauthorized', null);
-		}
-	}
-
-	if (!response.ok) {
-		let errorBody: unknown;
-		try {
-			errorBody = transformKeys(await response.json());
-		} catch {
-			errorBody = await response.text().catch(() => null);
-		}
-		throw new ApiError(response.status, response.statusText, errorBody);
-	}
-
-	// 204 No Content or empty body
-	if (response.status === 204 || response.headers.get('content-length') === '0') {
+	if (response.response.status === 204) {
 		return undefined as T;
 	}
 
-	const contentType = response.headers.get('content-type') ?? '';
-	if (!contentType.includes('application/json')) {
-		return (await response.text()) as unknown as T;
-	}
-
-	// Transform incoming snake_case keys to camelCase
-	const raw = await response.json();
-	return transformKeys(raw) as T;
+	return transformKeys(response.data) as T;
 }
-
-// ─── HTTP Method Shortcuts ────────────────────────────────────────────────────
 
 export const apiClient = {
 	get<T>(path: string, options?: RequestOptions): Promise<T> {
 		return request<T>('GET', path, undefined, options);
 	},
-
 	post<T>(path: string, body?: unknown, options?: RequestOptions): Promise<T> {
 		return request<T>('POST', path, body, options);
 	},
-
 	patch<T>(path: string, body?: unknown, options?: RequestOptions): Promise<T> {
 		return request<T>('PATCH', path, body, options);
 	},
-
 	put<T>(path: string, body?: unknown, options?: RequestOptions): Promise<T> {
 		return request<T>('PUT', path, body, options);
 	},
-
 	delete<T>(path: string, options?: RequestOptions): Promise<T> {
 		return request<T>('DELETE', path, undefined, options);
 	}
